@@ -8,12 +8,12 @@ Daicon containers are a wrapping binary format, made to build up flexible and ex
 
 Daicon is currently a draft specification, changes will use [Semantic Versioning 2.0.0](https://semver.org/).
 
-## Daicon Crate
+## Crates
 
-Daicon low-level types, for zero-copy reading and writing.
 This is a canonical reference implementation, as well as providing common types for Rust.
 
-- [![Crates.io](https://img.shields.io/crates/v/wrapmuck.svg?label=wrapmuck)](https://crates.io/crates/wrapmuck) [![docs.rs](https://docs.rs/wrapmuck/badge.svg)](https://docs.rs/wrapmuck/) - Simple wrapper generator around bytemuck pod types.
+- [![Crates.io](https://img.shields.io/crates/v/daicon.svg?label=daicon)](https://crates.io/crates/daicon) [![docs.rs](https://docs.rs/daicon/badge.svg)](https://docs.rs/daicon/) - Daicon low-level types, for zero-copy reading and writing
+- [![Crates.io](https://img.shields.io/crates/v/wrapmuck.svg?label=wrapmuck)](https://crates.io/crates/wrapmuck) [![docs.rs](https://docs.rs/wrapmuck/badge.svg)](https://docs.rs/wrapmuck/) - Simple wrapper generator around bytemuck pod types
 
 ## License
 

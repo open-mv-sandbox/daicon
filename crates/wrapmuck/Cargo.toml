@@ -2,7 +2,7 @@
 name = "wrapmuck"
 version = "0.1.0"
 edition = "2021"
-description = "Simple wrapper generator around bytemuck pod types."
+description = "Simple wrapper generator around bytemuck pod types"
 repository = "https://github.com/open-mv-sandbox/daicon"
 license = "MIT OR Apache-2.0"
 
