@@ -7,6 +7,11 @@ Daicon containers are a wrapping binary format, made to build up flexible and ex
 ## Status
 
 Daicon is currently a draft specification, changes will use [Semantic Versioning 2.0.0](https://semver.org/).
+You can use daicon in your projects, but no guarantees about cross-compatibility exist until a 1.0 release of the specification, besides an informal recommendation that 0.x minor versions stay compatible.
+
+## Who is using Daicon?
+
+- [Dacti Objects and Packages](https://github.com/open-mv-sandbox/dacti)
 
 ## Crates
 
