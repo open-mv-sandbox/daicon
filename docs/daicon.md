@@ -2,12 +2,12 @@
 
 > 🚧 *This is a working document, describing a work-in-progress format. Nothing described in this document should be seen as final. Features described in this document may not be implemented yet, or differ from as described.*
 
-Daicon containers are a wrapping file format, made to build up flexible and extendible formats out of "components".
+Daicon containers are a wrapping binary format, made to build up flexible and extendible formats out of "components".
 
 | Key | Value |
 | --- | --- |
 | Name | Daicon Container Format |
-| Version | 0.1.0-draft 🚧 |
+| Version | 0.1.0 🚧 |
 
 ## Motivation
 

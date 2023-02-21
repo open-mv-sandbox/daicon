@@ -4,13 +4,12 @@
 //! validation where useful. In most cases, you should not use this library directly, but instead
 //! use a format-specific library that uses this library.
 //!
-//! Endianness compatibility is maintained when setting and reading values, while maintaing
-//! near-native performance on little-endian systems in release build mode.
-//!
 //! Where possible, high-level wrappers are `#[repr(transparent)]` to the low-level data of those
 //! types, and can be reinterpreted. However, you should avoid doing this. Safe raw binary
 //! conversion can be done instead with `from_bytes`, `from_bytes_mut`, `as_bytes`, and
 //! `as_bytes_mut`.
+//!
+//! This library version is based off the daicon 0.1.0 spec.
 
 mod entry;
 mod header;
@@ -34,7 +33,7 @@ impl RegionData {
     }
 
     pub fn set_offset(&mut self, value: u32) {
-        self.0.offset = value.to_le();
+        self.0.offset = value;
     }
 
     pub fn size(&self) -> u32 {
@@ -42,7 +41,7 @@ impl RegionData {
     }
 
     pub fn set_size(&mut self, value: u32) {
-        self.0.size = value.to_le();
+        self.0.size = value;
     }
 }
 

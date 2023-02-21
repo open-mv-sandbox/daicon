@@ -4,14 +4,13 @@ use bytemuck::{Pod, TransparentWrapper, Zeroable};
 use wrapmuck::Wrapmuck;
 
 /// Header of the component table.
-#[derive(TransparentWrapper, Wrapmuck, Debug, Clone)]
+#[derive(TransparentWrapper, Wrapmuck, PartialEq, Hash, Debug, Default, Clone)]
 #[repr(transparent)]
 pub struct ComponentTableHeader(ComponentTableHeaderRaw);
 
 impl ComponentTableHeader {
     pub fn next_table_offset(&self) -> Option<NonZeroU64> {
-        let value = u64::from_le(self.0.next_table_offset);
-        NonZeroU64::new(value)
+        NonZeroU64::new(self.0.next_table_offset)
     }
 
     pub fn set_next_table_offset(&mut self, value: Option<NonZeroU64>) {
@@ -19,31 +18,31 @@ impl ComponentTableHeader {
     }
 
     pub fn next_table_length_hint(&self) -> u32 {
-        u32::from_le(self.0.next_table_length_hint)
+        self.0.next_table_length_hint
     }
 
     pub fn set_next_table_length_hint(&mut self, value: u32) {
-        self.0.next_table_length_hint = value.to_le();
+        self.0.next_table_length_hint = value;
     }
 
     pub fn length(&self) -> u32 {
-        u32::from_le(self.0.length)
+        self.0.length
     }
 
     pub fn set_length(&mut self, value: u32) {
-        self.0.length = value.to_le();
+        self.0.length = value;
     }
 
     pub fn entries_offset(&self) -> u64 {
-        u64::from_le(self.0.entries_offset)
+        self.0.entries_offset
     }
 
     pub fn set_entries_offset(&mut self, value: u64) {
-        self.0.entries_offset = value.to_le();
+        self.0.entries_offset = value;
     }
 }
 
-#[derive(Pod, Zeroable, Debug, Clone, Copy)]
+#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 struct ComponentTableHeaderRaw {
     next_table_offset: u64,

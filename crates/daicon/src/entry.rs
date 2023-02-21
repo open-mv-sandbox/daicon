@@ -3,7 +3,7 @@ use uuid::Uuid;
 use wrapmuck::Wrapmuck;
 
 /// Entry in the component table.
-#[derive(TransparentWrapper, Wrapmuck, Debug, Clone)]
+#[derive(TransparentWrapper, Wrapmuck, PartialEq, Hash, Debug, Default, Clone)]
 #[repr(transparent)]
 pub struct ComponentEntry(ComponentEntryRaw);
 
@@ -25,7 +25,7 @@ impl ComponentEntry {
     }
 }
 
-#[derive(Pod, Zeroable, Debug, Clone, Copy)]
+#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 struct ComponentEntryRaw {
     type_uuid: [u8; 16],

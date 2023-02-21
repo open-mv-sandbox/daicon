@@ -1,7 +1,7 @@
 //! Simple wrapper generator around bytemuck pod types.
 //!
 //! Sometimes, you want to expose raw byte bytemuck conversions, but not actually publicly depend
-//! on bytemuck. This crate's macro is for that.
+//! on bytemuck. This crate's derive macro automatically implements wrapping functions.
 
 use proc_macro::TokenStream;
 use quote::quote;
@@ -20,7 +20,7 @@ pub fn derive_wrapmuck(input: TokenStream) -> TokenStream {
                 value
             }
 
-            /// Get the size of the type in bytes.
+            /// Get the size of the value in bytes.
             pub fn bytes_len() -> usize {
                 std::mem::size_of::<#ident>()
             }
