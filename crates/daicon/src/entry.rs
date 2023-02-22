@@ -8,12 +8,12 @@ use wrapmuck::Wrapmuck;
 pub struct ComponentEntry(ComponentEntryRaw);
 
 impl ComponentEntry {
-    pub fn type_uuid(&self) -> Uuid {
-        Uuid::from_bytes_le(self.0.type_uuid)
+    pub fn type_id(&self) -> Uuid {
+        Uuid::from_bytes_le(self.0.type_id)
     }
 
-    pub fn set_type_uuid(&mut self, value: Uuid) {
-        self.0.type_uuid = value.to_bytes_le();
+    pub fn set_type_id(&mut self, value: Uuid) {
+        self.0.type_id = value.to_bytes_le();
     }
 
     pub fn data(&self) -> &[u8; 8] {
@@ -28,6 +28,6 @@ impl ComponentEntry {
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 struct ComponentEntryRaw {
-    type_uuid: [u8; 16],
+    type_id: [u8; 16],
     data: [u8; 8],
 }

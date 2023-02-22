@@ -34,14 +34,18 @@ pub fn derive_wrapmuck(input: TokenStream) -> TokenStream {
             pub fn from_bytes_mut(bytes: &mut [u8]) -> &mut Self {
                 bytemuck::TransparentWrapper::wrap_mut(bytemuck::from_bytes_mut(bytes))
             }
+        }
 
-            /// Get the inner data as bytes.
-            pub fn as_bytes(&self) -> &[u8] {
+        impl std::ops::Deref for #ident {
+            type Target = [u8];
+
+            fn deref(&self) -> &Self::Target {
                 bytemuck::bytes_of(&self.0)
             }
+        }
 
-            /// Get the inner data as mutable bytes.
-            pub fn as_bytes_mut(&mut self) -> &mut [u8] {
+        impl std::ops::DerefMut for #ident {
+            fn deref_mut(&mut self) -> &mut Self::Target {
                 bytemuck::bytes_of_mut(&mut self.0)
             }
         }

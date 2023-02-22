@@ -7,7 +7,11 @@ Daicon containers are a wrapping binary format, made to build up flexible and ex
 | Key | Value |
 | --- | --- |
 | Name | Daicon Container Format |
-| Version | 0.1.0 🚧 |
+| Version | 0.1.1-draft 🚧 |
+
+## Table of Contents
+
+[toc]
 
 ## Motivation
 
@@ -29,9 +33,9 @@ Daicon containers are made up out of multiple sections.
 
 | Bytes | Description |
 | --- | --- |
-| 8 | signature |
-| 24 + (N * 24) | component table |
-| ... | inner data |
+| 8 | Signature |
+| 24 + (N * 24) | Component Table |
+| ... | Inner Data |
 
 #### Endianness
 
@@ -43,7 +47,7 @@ Unless already validated by another system, implementations should start by read
 
 | Bytes | Description |
 | --- | --- |
-| 8 | signature, 0xFF followed by "daicon0" |
+| 8 | Signature, 0xFF followed by "daicon0" |
 
 This should match exactly. Future incompatible versions may change "0". An implementation reading a different number there should reject the file as incompatible.
 
@@ -59,43 +63,41 @@ The component table starts with a header, describing metadata for parsing this s
 
 | Bytes | Description |
 | --- | --- |
-| 8 | next table offset |
-| 4 | next table length hint |
-| 4 | length |
-| 8 | entries offset |
+| 8 | Next Table Offset |
+| 4 | Next Table Length Hint |
+| 4 | Length |
+| 8 | Entries Offset |
 
 Directly following this, there will be `length` amount of components.
 
 | Bytes | Description |
 | --- | --- |
-| 16 | type UUID |
-| 8 | data (typically a region) |
+| 16 | Type ID |
+| 8 | Data (typically a region) |
 
 #### Type ID
 
-The `type UUID` is used to identify the location of components for compatibility and interoperability. Components are expected to follow semantic versioning, with a major version increase resulting in a new UUID.
+The `Type ID` is a UUID used to identify the location of components for compatibility and interoperability. Components are expected to follow semantic versioning, with a major version increase resulting in a new ID.
 
-Type UUIDs **MUST** be unique, this enforces that there is no situation where continuing to read a table will change the components already found. An implementation can decide to stop reading components early, if it has found the components it needs.
+A `Type ID` **MUST** be unique in all tables, this enforces that there is no situation where continuing to read entries will change the components already found.
+
+> ℹ️ An implementation can decide to stop reading component entries early, if it has found the components it needs.
 
 A format **MAY** specify recommended component ordering to aide in detecting the best components available for a task.
 
+> 🚧 The use of UUIDs is actively under discussion. Read the [tracking issue](https://github.com/open-mv-sandbox/daicon/issues/1) for more information.
+
 #### Data
 
-Components define the format of their data in the table themselves, but will typically specify a "region". A "region" is an `offset` and `size`, both 4 bytes long. When specifying offsets, those should be added with the `entries offset` value in the table header. When the data specifies a region, these **MAY** overlap.
-
-> ⚠️ Always validate all offsets and sizes.
-
-Regions are arbitrary binary data, and how they are interpreted is decided by the specific component's specification. Derived formats are encouraged to reuse standard component specifications where possible.
-
-> ⚠️ Component regions are not required to pack tightly. A file can, and commonly will, contain much more data than just the component regions.
+Components define the format of their data in the table themselves, but will typically specify a "region". Common data types are listed in the "common data types" section.
 
 It is recommended for the minor version of a component to be tracked inside the component data or region. For example, as a JSON field if your component uses JSON.
 
 #### Next Table
 
-If not zero, the `next table` descibes the location of the next component table. This is to allow the recommendations in "CDN Cache Coherency" and "Reducing Round-Trips" to be followed without limiting extensibility.
+If not zero, the `Next Table` descibes the location of the next component table. This is to allow the recommendations in "CDN Cache Coherency" and "Reducing Round-Trips" to be followed without limiting extensibility.
 
-The `legnth hint` specifices how many components **MAY** be present at that location for efficiently pre-fetching the entire table and not just the header.
+The `Next Table Length Hint` specifices how many components **MAY** be present at that location for efficiently pre-fetching the entire table and not just the header.
 
 A reader **MAY** decide not to continue reading the next table if it has already read the components required by the format. If this is not the case, a reader **MUST** read the next table, or inform the caller it must do so.
 
@@ -109,6 +111,24 @@ The rest of the file contains arbitrary data. For example:
 
 - Component regions, containing the component implementations
 - Data regions indirectly referenced by components
+
+## Common Data Types
+
+
+### Region
+
+| Bytes | Description |
+| --- | --- |
+| 4 | Relative Offset |
+| 4 | Size |
+
+`Relative Offset` must be added to the `Entries Offset` value to get the true offset in the format.
+
+> ⚠️ Always validate all offsets and sizes.
+
+Regions are arbitrary binary data, and how they are interpreted is decided by the specific component's specification. Derived formats are encouraged to reuse standard component specifications where possible.
+
+Regions **MAY** overlap and **MAY** not be tightly packed and out of order.
 
 ## Using Daicon
 
@@ -200,6 +220,21 @@ This example component specification describes the presence of unstructured text
 | Name | Text Component Example |
 | Version | 0.1.0 |
 | UUID | 37cb72a4-caab-440c-8b7c-869019ed348e |
-| Table Data | region |
+| Table Data | Region |
 
 The contents of the component region is UTF-8 text data. Null characters should be considered invalid data and an implementation **MUST** reject parsing the component if the region contains these.
+
+## Change Log
+
+### 0.1.1-draft 🚧
+
+- Change "offset" in regions to "relative offset"
+- Separate "region" into its own sub-heading
+- Change "Type UUID" to "Type ID", and clarify UUID separately
+- Add note on UUID discussion
+- Use title case in layout tables
+- Fix spelling mistakes
+
+### 0.1.0
+
+Initial publication.
