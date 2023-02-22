@@ -7,7 +7,7 @@ Daicon containers are a wrapping binary format, made to build up flexible and ex
 | Key | Value |
 | --- | --- |
 | Name | Daicon Container Format |
-| Version | 0.1.1-draft 🚧 |
+| Version | 0.1.1 |
 
 ## Table of Contents
 
@@ -21,11 +21,7 @@ Daicon containers are designed, but not exclusively for, metaverse objects, and 
 - Modularity and extendibility. Superset features or metadata can be added to existing formats, without requiring central coordination. This allows for new format features to be tested easily, and for adding information only relevant for one specific case, without complicating a central format specification.
 - Easy to parse. Daicon containers are extremely easy to parse in any language, even without dynamic memory. The surface area of the standard is also intentionally very low, meaning no special cases or obscure extensions you need to support for full coverage.
 - Low overhead. A format based on daicon containers is just 56 bytes larger than the raw component. This one bullet point is already over two times that.
-
-Additionally, by placing additional restrictions on the binary layout of your format, you can also use the following features:
-
-- Direct addressing. Daicon containers do not require any special parsing or decompressing at a container level to access the inner data. This is delegated to the inner components which may, in the case of "dacti packages" for example, decide to only do compression at a per-object level. This allows areas to be directly addressed through, for example, [HTTP Range Requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Range_requests).
-- Cache coherency. Daicon is designed to work well with CDN and edge caches. Derived formats can append additional data and update atomically without needing to invalidate the entire file.
+- By placing additional restrictions from [daicon-cdn](daicon-cdn.md) on the binary layout of your format, you can use daicon containers efficiently on CDNs to deliver large amounts of data efficiently with sparse requests.
 
 ## Daicon Format
 
@@ -95,7 +91,7 @@ It is recommended for the minor version of a component to be tracked inside the 
 
 #### Next Table
 
-If not zero, the `Next Table` descibes the location of the next component table. This is to allow the recommendations in "CDN Cache Coherency" and "Reducing Round-Trips" to be followed without limiting extensibility.
+If not zero, the `Next Table` descibes the location of the next component table. This is to allow the recommendations in "daicon-cdn" to be followed without limiting extensibility.
 
 The `Next Table Length Hint` specifices how many components **MAY** be present at that location for efficiently pre-fetching the entire table and not just the header.
 
@@ -156,30 +152,6 @@ A new format version can raise the minimum required version of components. The f
 
 You can include multiple major versions of the same component in a daicon container, as they are required to have different unique UUIDs. If you find yourself needing to include multiple *minor* versions, you are likely not correctly following semantic versioning.
 
-## Optimizing Daicon
-
-> 🚧 This is pending to be moved to a separate optional superset specification.
-
-### Reducing Round-Trips
-
-If your format will be fetched *partially* from a server, and then indexed using ranges, your format specification should include recommendations to reduce necessary round-trips.
-
-For example, you can recommend (or even require) an index component describing regions contained in your file to exist within the first 64kb. This would allow a client aware of your format to always fetch the full first 64kb and not need additional round-trips to the server.
-
-Not all components have to fall in this region, only those that need this 'fast-path'. You are recommended to specify that clients should degrade performance rather than fail if the included components' data exceeds the specified region.
-
-### CDN Cache Coherency
-
-Daicon containers are designed for efficient cache coherency on CDNs and edge caches. To achieve this, daicon's component system can be updated atomically.
-
-You can use the values in the component table as atomic switches, after appending binary data, repointing locations, and validating all caches have been updated. The component table itself also has "count" and "extension", which too can be atomically updated after verifying a cache flush.
-
-If your format needs this functionality in combination with "Reducing Round-Trips", you are recommended to specify padding in the pre-fetch region, reserving it, to allow the file to be updated without a full cache flush. You should also pad the component table for the same reason.
-
-### Specifying Append-Only
-
-Binary Data previously written should **never** move or change its value to ensure stale client table requests do not retrieve corrupt data from an update. Table pointer to offsets may be updated as necessary. If a file has stale or unused sections, a new file should be created with the unnecessary data culled out.
-
 ## Examples
 
 Examples of how to define format and component specifications on top of daicon.
@@ -226,7 +198,7 @@ The contents of the component region is UTF-8 text data. Null characters should 
 
 ## Change Log
 
-### 0.1.1-draft 🚧
+### 0.1.1
 
 - Change "offset" in regions to "relative offset"
 - Separate "region" into its own sub-heading
@@ -234,6 +206,7 @@ The contents of the component region is UTF-8 text data. Null characters should 
 - Add note on UUID discussion
 - Use title case in layout tables
 - Fix spelling mistakes
+- Extract daicon-cdn specification into separate document
 
 ### 0.1.0
 

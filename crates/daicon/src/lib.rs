@@ -8,7 +8,7 @@
 //! types, and can be reinterpreted. However, you should avoid doing this. Safe raw binary
 //! conversion can be done instead with `from_bytes`, `from_bytes_mut`, and `Deref`.
 //!
-//! This library version is based off the daicon 0.1.1-draft spec.
+//! This library version is based off the daicon 0.1.1 specification.
 
 mod entry;
 mod header;
