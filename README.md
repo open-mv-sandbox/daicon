@@ -1,6 +1,6 @@
 # Daicon
 
-Daicon containers are a wrapping binary format, made to build up flexible and extendible formats out of "components".
+Daicon is a wrapping binary format, made to build up flexible and extendible formats out of "components".
 
 [Read the daicon specification draft here!](docs/daicon.md)
 

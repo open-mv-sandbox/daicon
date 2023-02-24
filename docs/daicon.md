@@ -1,31 +1,27 @@
-# Daicon Container Format
+# Daicon Format
 
 > 🚧 *This is a working document, describing a work-in-progress format. Nothing described in this document should be seen as final. Features described in this document may not be implemented yet, or differ from as described.*
 
-Daicon containers are a wrapping binary format, made to build up flexible and extendible formats out of "components".
+Daicon is a wrapping binary format, made to build up flexible and extendible formats out of "components".
 
 | Key | Value |
 | --- | --- |
-| Name | Daicon Container Format |
-| Version | 0.1.1 |
-
-## Table of Contents
-
-[toc]
+| Name | Daicon Format |
+| Version | 0.1.2-draft 🚧 |
 
 ## Motivation
 
-Daicon containers are designed, but not exclusively for, metaverse objects, and metaverse data packages. This use case presents many specific requirements that many other formats don't provide (at the same time):
+Daicon is designed, but not exclusively for, metaverse objects, and metaverse data packages. This use case presents many specific requirements that many other formats don't provide (at the same time):
 
 - Backwards and forwards compatibility. If the design of a format changes, or a new format comes in vogue, the component system allows formats to adapt while still providing compatible components.
 - Modularity and extendibility. Superset features or metadata can be added to existing formats, without requiring central coordination. This allows for new format features to be tested easily, and for adding information only relevant for one specific case, without complicating a central format specification.
-- Easy to parse. Daicon containers are extremely easy to parse in any language, even without dynamic memory. The surface area of the standard is also intentionally very low, meaning no special cases or obscure extensions you need to support for full coverage.
-- Low overhead. A format based on daicon containers is just 56 bytes larger than the raw component. This one bullet point is already over two times that.
-- By placing additional restrictions from [daicon-cdn](daicon-cdn.md) on the binary layout of your format, you can use daicon containers efficiently on CDNs to deliver large amounts of data efficiently with sparse requests.
+- Easy to parse. Daicon is extremely easy to parse in any language, even without dynamic memory. The surface area of the standard is also intentionally very low, meaning no special cases or obscure extensions you need to support for full coverage.
+- Low overhead. A format based on daicon is just 56 bytes larger than the raw component. This one bullet point is already over two times that.
+- By placing additional restrictions on the binary layout of your format, you can use daicon efficiently on CDNs to deliver large amounts of data efficiently with sparse requests.
 
 ## Daicon Format
 
-Daicon containers are made up out of multiple sections.
+Daicon is made up out of multiple sections.
 
 | Bytes | Description |
 | --- | --- |
@@ -64,7 +60,7 @@ The component table starts with a header, describing metadata for parsing this s
 | 4 | Length |
 | 8 | Entries Offset |
 
-Directly following this, there will be `length` amount of components.
+Directly following this, there will be "Length" amount of components.
 
 | Bytes | Description |
 | --- | --- |
@@ -73,9 +69,9 @@ Directly following this, there will be `length` amount of components.
 
 #### Type ID
 
-The `Type ID` is a UUID used to identify the location of components for compatibility and interoperability. Components are expected to follow semantic versioning, with a major version increase resulting in a new ID.
+The "Type ID" is a UUID used to identify the location of components for compatibility and interoperability. Components are expected to follow semantic versioning, with a major version increase resulting in a new ID.
 
-A `Type ID` **MUST** be unique in all tables, this enforces that there is no situation where continuing to read entries will change the components already found.
+A "Type ID" **MUST** be unique in all tables, this enforces that there is no situation where continuing to read entries will change the components already found.
 
 > ℹ️ An implementation can decide to stop reading component entries early, if it has found the components it needs.
 
@@ -85,15 +81,13 @@ A format **MAY** specify recommended component ordering to aide in detecting the
 
 #### Data
 
-Components define the format of their data in the table themselves, but will typically specify a "region". Common data types are listed in the "common data types" section.
+Components define the format of their data in the table themselves, but will typically specify a "Region". Common data types are listed in the "Common Data Types" section.
 
 It is recommended for the minor version of a component to be tracked inside the component data or region. For example, as a JSON field if your component uses JSON.
 
 #### Next Table
 
-If not zero, the `Next Table` descibes the location of the next component table. This is to allow the recommendations in "daicon-cdn" to be followed without limiting extensibility.
-
-The `Next Table Length Hint` specifices how many components **MAY** be present at that location for efficiently pre-fetching the entire table and not just the header.
+If not zero, the "Next Table" descibes the location of the next component table. The "Next Table Length Hint" specifices how many components **MAY** be present at that location for efficiently pre-fetching the entire table and not just the header.
 
 A reader **MAY** decide not to continue reading the next table if it has already read the components required by the format. If this is not the case, a reader **MUST** read the next table, or inform the caller it must do so.
 
@@ -110,7 +104,6 @@ The rest of the file contains arbitrary data. For example:
 
 ## Common Data Types
 
-
 ### Region
 
 | Bytes | Description |
@@ -118,7 +111,7 @@ The rest of the file contains arbitrary data. For example:
 | 4 | Relative Offset |
 | 4 | Size |
 
-`Relative Offset` must be added to the `Entries Offset` value to get the true offset in the format.
+"Relative Offset" must be added to the "Entries Offset" value to get the true offset in the format.
 
 > ⚠️ Always validate all offsets and sizes.
 
@@ -150,7 +143,7 @@ Derived formats and components should use [Semantic Versioning 2.0.0](https://se
 
 A new format version can raise the minimum required version of components. The format will continue to be backwards compatible, as long as the component requirements by this new version cover the component requirements by the previous versions, following the rules set out by semantic versioning.
 
-You can include multiple major versions of the same component in a daicon container, as they are required to have different unique UUIDs. If you find yourself needing to include multiple *minor* versions, you are likely not correctly following semantic versioning.
+You can include multiple major versions of the same component in a daicon file, as they are required to have different unique UUIDs. If you find yourself needing to include multiple *minor* versions, you are likely not correctly following semantic versioning.
 
 ## Examples
 
@@ -197,6 +190,10 @@ This example component specification describes the presence of unstructured text
 The contents of the component region is UTF-8 text data. Null characters should be considered invalid data and an implementation **MUST** reject parsing the component if the region contains these.
 
 ## Change Log
+
+### 0.1.2-draft 🚧
+
+- Remove mention of confusing "containers" phrasing.
 
 ### 0.1.1
 
