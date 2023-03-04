@@ -1,33 +1,28 @@
-use bytemuck::{Pod, TransparentWrapper, Zeroable};
+use bytemuck::{Pod, Zeroable};
 use uuid::Uuid;
-use wrapmuck::Wrapmuck;
 
 /// Entry in the component table.
-#[derive(TransparentWrapper, Wrapmuck, PartialEq, Hash, Debug, Default, Clone)]
-#[repr(transparent)]
-pub struct ComponentEntry(ComponentEntryRaw);
+#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
+#[repr(C, align(8))]
+pub struct ComponentEntry {
+    type_id: [u8; 16],
+    data: [u8; 8],
+}
 
 impl ComponentEntry {
     pub fn type_id(&self) -> Uuid {
-        Uuid::from_bytes_le(self.0.type_id)
+        Uuid::from_bytes_le(self.type_id)
     }
 
     pub fn set_type_id(&mut self, value: Uuid) {
-        self.0.type_id = value.to_bytes_le();
+        self.type_id = value.to_bytes_le();
     }
 
     pub fn data(&self) -> &[u8; 8] {
-        &self.0.data
+        &self.data
     }
 
     pub fn data_mut(&mut self) -> &mut [u8; 8] {
-        &mut self.0.data
+        &mut self.data
     }
-}
-
-#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
-#[repr(C)]
-struct ComponentEntryRaw {
-    type_id: [u8; 16],
-    data: [u8; 8],
 }

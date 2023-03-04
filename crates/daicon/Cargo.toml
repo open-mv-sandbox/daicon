@@ -1,6 +1,6 @@
 [package]
 name = "daicon"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Daicon low-level types, for zero-copy reading and writing"
 readme = "../../README.md"
@@ -11,7 +11,6 @@ license = "MIT OR Apache-2.0"
 bytemuck = { workspace = true, features = ["derive"] }
 thiserror.workspace = true
 uuid.workspace = true
-wrapmuck.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

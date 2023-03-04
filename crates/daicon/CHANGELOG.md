@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.3.0
+
+- Remove wrapmuck
+- Fix alignment on entries
+
 ## 0.2.0
 
 - Update to daicon "0.1.1"

@@ -1,29 +1,31 @@
 //! Common standard "data" types.
 
-use bytemuck::{Pod, TransparentWrapper, Zeroable};
+use bytemuck::{Pod, Zeroable};
 use thiserror::Error;
-use wrapmuck::Wrapmuck;
 
 /// A region containing an offset and size.
-#[derive(TransparentWrapper, Wrapmuck, Debug, Clone)]
-#[repr(transparent)]
-pub struct RegionData(RegionDataRaw);
+#[derive(Pod, Zeroable, Debug, Clone, Copy)]
+#[repr(C)]
+pub struct RegionData {
+    relative_offset: u32,
+    size: u32,
+}
 
 impl RegionData {
     pub fn relative_offset(&self) -> u32 {
-        self.0.relative_offset
+        self.relative_offset
     }
 
     pub fn set_relative_offset(&mut self, value: u32) {
-        self.0.relative_offset = value;
+        self.relative_offset = value;
     }
 
     pub fn size(&self) -> u32 {
-        self.0.size
+        self.size
     }
 
     pub fn set_size(&mut self, value: u32) {
-        self.0.size = value;
+        self.size = value;
     }
 
     /// Get the true offset in the file for this entry.
@@ -46,13 +48,6 @@ impl RegionData {
 
         Ok(())
     }
-}
-
-#[derive(Pod, Zeroable, Debug, Clone, Copy)]
-#[repr(C)]
-struct RegionDataRaw {
-    relative_offset: u32,
-    size: u32,
 }
 
 #[derive(Error, Debug)]
