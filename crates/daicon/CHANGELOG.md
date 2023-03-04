@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.3.1 🚧
+
+- Fix examples
+- Fix incorrect documentation
+
 ## 0.3.0
 
 - Remove wrapmuck

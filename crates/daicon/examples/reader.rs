@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Error};
+use bytemuck::{bytes_of_mut, from_bytes, Zeroable};
 use daicon::{data::RegionData, ComponentEntry, ComponentTableHeader, SIGNATURE};
 use uuid::{uuid, Uuid};
 
@@ -26,7 +27,7 @@ fn main() -> Result<(), Error> {
     let entry = table
         .get(&TEXT_COMPONENT_EXAMPLE_ID)
         .context("no text component example in file")?;
-    let region = RegionData::from_bytes(&entry.data);
+    let region = from_bytes::<RegionData>(&entry.data);
 
     // Read the text data
     let mut data = vec![0u8; region.size() as usize];
@@ -85,13 +86,13 @@ fn read_table(
 
     // Read header
     let mut header = ComponentTableHeader::zeroed();
-    file.read_exact(&mut header)?;
+    file.read_exact(bytes_of_mut(&mut header))?;
 
     // Read entries
     let mut entries = Vec::new();
     for _ in 0..header.length() {
         let mut entry = ComponentEntry::zeroed();
-        file.read_exact(&mut entry)?;
+        file.read_exact(bytes_of_mut(&mut entry))?;
 
         println!("found component: {}", entry.type_id());
 
