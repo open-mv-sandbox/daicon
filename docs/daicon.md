@@ -1,6 +1,8 @@
 # Daicon Format
 
-> 🚧 *This is a working document, describing a work-in-progress format. Nothing described in this document should be seen as final. Features described in this document may not be implemented yet, or differ from as described.*
+> 🚧 This document is currently out-of-sync with the reference implementation, which is prototyping upcoming version 0.2.0.
+
+> 🚧 This is a working document, describing a work-in-progress format. Nothing described in this document should be seen as final. Features described in this document may not be implemented yet, or differ from as described.
 
 Daicon is a wrapping binary format, made to build up flexible and extendible formats out of "components".
 

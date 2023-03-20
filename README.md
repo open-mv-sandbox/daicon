@@ -1,6 +1,6 @@
 # Daicon
 
-Daicon is a wrapping binary format, made to build up flexible and extendible formats out of "components".
+Daicon lets you list and find a file's contents by UUIDs.
 
 [Read the daicon specification draft here!](docs/daicon.md)
 
@@ -15,9 +15,9 @@ You can use daicon in your projects, but no guarantees about cross-compatibility
 
 ## Crates
 
-This is a canonical reference implementation, as well as providing common types for Rust.
+This is a canonical reference implementation, as well as providing common types for other Rust crates.
 
-- [![Crates.io](https://img.shields.io/crates/v/daicon.svg?label=daicon)](https://crates.io/crates/daicon) [![docs.rs](https://docs.rs/daicon/badge.svg)](https://docs.rs/daicon/) - Daicon low-level types, for zero-copy reading and writing
+- [![Crates.io](https://img.shields.io/crates/v/daicon.svg?label=daicon)](https://crates.io/crates/daicon) [![docs.rs](https://docs.rs/daicon/badge.svg)](https://docs.rs/daicon/) - Daicon low-level types, for zero-copy reading and writing.
 
 ## License
 

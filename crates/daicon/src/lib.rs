@@ -4,13 +4,13 @@
 //! validation where useful. In most cases, you should not use this library directly, but instead
 //! use a format-specific library that uses this library.
 //!
-//! This library version is based off the daicon 0.1.1 specification.
+//! This library version is based off the daicon 0.2.0 specification.
 
 mod entry;
 mod header;
-pub mod data;
+pub mod utils;
 
-pub use self::{entry::ComponentEntry, header::ComponentTableHeader};
+pub use self::{entry::Entry, header::Header};
 
 /// Signature of a daicon file, should be inserted and validated at the top of a file.
 pub const SIGNATURE: &[u8] = b"\xFFdaicon0";

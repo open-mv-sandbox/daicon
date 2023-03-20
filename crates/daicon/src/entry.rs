@@ -1,28 +1,40 @@
 use bytemuck::{Pod, Zeroable};
 use uuid::Uuid;
 
-/// Entry in the component table.
+/// Entry in a daicon table.
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C, align(8))]
-pub struct ComponentEntry {
-    type_id: [u8; 16],
-    data: [u8; 8],
+pub struct Entry {
+    id: [u8; 16],
+    relative_offset: u32,
+    size: u32,
 }
 
-impl ComponentEntry {
-    pub fn type_id(&self) -> Uuid {
-        Uuid::from_bytes_le(self.type_id)
+impl Entry {
+    /// Get the ID of the entry.
+    pub fn id(&self) -> Uuid {
+        Uuid::from_bytes_le(self.id)
     }
 
-    pub fn set_type_id(&mut self, value: Uuid) {
-        self.type_id = value.to_bytes_le();
+    pub fn set_id(&mut self, value: Uuid) {
+        self.id = value.to_bytes_le();
     }
 
-    pub fn data(&self) -> &[u8; 8] {
-        &self.data
+    /// Get the offset of the entry, relative to `table.end_of_table`.
+    pub fn relative_offset(&self) -> u32 {
+        self.relative_offset
     }
 
-    pub fn data_mut(&mut self) -> &mut [u8; 8] {
-        &mut self.data
+    pub fn set_relative_offset(&mut self, value: u32) {
+        self.relative_offset = value;
+    }
+
+    /// Get the size of the entry in bytes.
+    pub fn size(&self) -> u32 {
+        self.size
+    }
+
+    pub fn set_size(&mut self, value: u32) {
+        self.size = value;
     }
 }

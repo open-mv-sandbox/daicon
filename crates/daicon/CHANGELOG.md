@@ -1,9 +1,8 @@
 # Change Log
 
-## 0.3.1 🚧
+## 0.4.0
 
-- Fix examples
-- Fix incorrect documentation
+- Update for prototyping work-in-progress 0.2.0 specification.
 
 ## 0.3.0
 
