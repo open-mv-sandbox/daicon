@@ -8,7 +8,6 @@
 
 mod entry;
 mod header;
-pub mod utils;
 
 pub use self::{entry::Entry, header::Header};
 

@@ -6,7 +6,7 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Header {
-    next_valid: u64,
+    next: u64,
     capacity: u8,
     next_capacity: u8,
     length: u8,
@@ -34,13 +34,13 @@ impl Header {
         self.length = value;
     }
 
-    /// Get the absolute offset of the next table.
-    pub fn next_offset(&self) -> Option<NonZeroU64> {
-        NonZeroU64::new(self.next_valid)
+    /// Get the offset of the next table.
+    pub fn next(&self) -> Option<NonZeroU64> {
+        NonZeroU64::new(self.next)
     }
 
-    pub fn set_next_offset(&mut self, value: Option<NonZeroU64>) {
-        self.next_valid = value.map(|v| v.get()).unwrap_or(0);
+    pub fn set_next(&mut self, value: Option<NonZeroU64>) {
+        self.next = value.map(|v| v.get()).unwrap_or(0);
     }
 
     /// Get the expected `capacity` value of the next table, for efficient pre-fetching.
@@ -48,7 +48,7 @@ impl Header {
         self.next_capacity
     }
 
-    pub fn set_next_capacity_(&mut self, value: u8) {
+    pub fn set_next_capacity(&mut self, value: u8) {
         self.next_capacity = value;
     }
 }

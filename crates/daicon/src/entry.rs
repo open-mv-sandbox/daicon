@@ -6,8 +6,8 @@ use uuid::Uuid;
 #[repr(C, align(8))]
 pub struct Entry {
     id: [u8; 16],
-    relative_offset: u32,
-    size: u32,
+    offset: u64,
+    size: u64,
 }
 
 impl Entry {
@@ -20,21 +20,21 @@ impl Entry {
         self.id = value.to_bytes_le();
     }
 
-    /// Get the offset of the entry, relative to `table.end_of_table`.
-    pub fn relative_offset(&self) -> u32 {
-        self.relative_offset
+    /// Get the offset of the entry.
+    pub fn offset(&self) -> u64 {
+        self.offset
     }
 
-    pub fn set_relative_offset(&mut self, value: u32) {
-        self.relative_offset = value;
+    pub fn set_offset(&mut self, value: u64) {
+        self.offset = value;
     }
 
     /// Get the size of the entry in bytes.
-    pub fn size(&self) -> u32 {
+    pub fn size(&self) -> u64 {
         self.size
     }
 
-    pub fn set_size(&mut self, value: u32) {
+    pub fn set_size(&mut self, value: u64) {
         self.size = value;
     }
 }

@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.5.0
+
+- Remove indirect offset, didn't work out well in prototyping.
+- Update for prototyping work-in-progress 0.2.0 specification.
+
 ## 0.4.0
 
 - Update for prototyping work-in-progress 0.2.0 specification.

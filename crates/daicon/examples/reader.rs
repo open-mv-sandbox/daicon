@@ -7,10 +7,7 @@ use std::{
 
 use anyhow::{bail, Context, Error};
 use bytemuck::{bytes_of_mut, Zeroable};
-use daicon::{
-    utils::{EntryExt, HeaderExt},
-    Entry, Header, SIGNATURE,
-};
+use daicon::{Entry, Header, SIGNATURE};
 use uuid::{uuid, Uuid};
 
 const TEXT_EXAMPLE_ID: Uuid = uuid!("37cb72a4-caab-440c-8b7c-869019ed348e");
@@ -32,8 +29,8 @@ fn main() -> Result<(), Error> {
         .context("no text component example in file")?;
 
     // Read the text data
-    let mut data = vec![0u8; entry.entry.size() as usize];
-    let offset = entry.entry.offset(entry.end_of_table);
+    let mut data = vec![0u8; entry.size() as usize];
+    let offset = entry.offset();
     file.seek(SeekFrom::Start(offset))?;
     file.read_exact(&mut data)?;
 
@@ -44,7 +41,7 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-fn read_components(file: &mut File) -> Result<HashMap<Uuid, ReadEntry>, Error> {
+fn read_components(file: &mut File) -> Result<HashMap<Uuid, Entry>, Error> {
     let mut entries = HashMap::new();
     let mut next = NonZeroU64::new(8);
 
@@ -61,25 +58,16 @@ fn read_components(file: &mut File) -> Result<HashMap<Uuid, ReadEntry>, Error> {
         // Read the table's data
         let offset = current.get();
         let (header, table_entries) = read_table(file, offset)?;
-        let end_of_table = header.end_of_table(offset);
 
         for entry in table_entries {
-            entries.entry(entry.id()).or_insert_with(|| ReadEntry {
-                end_of_table,
-                entry,
-            });
+            entries.insert(entry.id(), entry);
         }
 
         // Keep following the next table until there's no next
-        next = header.next_offset();
+        next = header.next();
     }
 
     Ok(entries)
-}
-
-struct ReadEntry {
-    end_of_table: u64,
-    entry: Entry,
 }
 
 fn read_table(file: &mut File, offset: u64) -> Result<(Header, Vec<Entry>), Error> {
