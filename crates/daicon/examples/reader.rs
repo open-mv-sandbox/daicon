@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     fs::File,
     io::{Read, Seek, SeekFrom},
-    num::NonZeroU64,
 };
 
 use anyhow::{bail, Context, Error};
@@ -14,13 +13,6 @@ const TEXT_EXAMPLE_ID: Uuid = uuid!("37cb72a4-caab-440c-8b7c-869019ed348e");
 
 fn main() -> Result<(), Error> {
     let mut file = File::open("./lorem.example-text")?;
-
-    // Validate signature
-    let mut data = [0u8; 8];
-    file.read_exact(&mut data)?;
-    if data != SIGNATURE {
-        bail!("invalid signature");
-    }
 
     // Get the component entry that contains the region
     let table = read_components(&mut file)?;
@@ -43,7 +35,7 @@ fn main() -> Result<(), Error> {
 
 fn read_components(file: &mut File) -> Result<HashMap<Uuid, Entry>, Error> {
     let mut entries = HashMap::new();
-    let mut next = NonZeroU64::new(8);
+    let mut next = Some(0);
 
     let mut checked = HashSet::new();
 
@@ -56,15 +48,14 @@ fn read_components(file: &mut File) -> Result<HashMap<Uuid, Entry>, Error> {
         checked.insert(current);
 
         // Read the table's data
-        let offset = current.get();
-        let (header, table_entries) = read_table(file, offset)?;
+        let (header, table_entries) = read_table(file, current)?;
 
         for entry in table_entries {
             entries.insert(entry.id(), entry);
         }
 
         // Keep following the next table until there's no next
-        next = header.next();
+        next = header.next().map(|v| v.get());
     }
 
     Ok(entries)
@@ -76,6 +67,13 @@ fn read_table(file: &mut File, offset: u64) -> Result<(Header, Vec<Entry>), Erro
     // Read header
     let mut header = Header::zeroed();
     file.read_exact(bytes_of_mut(&mut header))?;
+
+    // Validate header signature
+    if header.signature() != SIGNATURE {
+        bail!("invalid signature");
+    }
+
+    println!("reading header at: {:#010x}", offset);
 
     // Read entries
     let mut entries = Vec::new();

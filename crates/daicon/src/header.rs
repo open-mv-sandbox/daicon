@@ -2,20 +2,30 @@ use std::num::NonZeroU64;
 
 use bytemuck::{Pod, Zeroable};
 
+use crate::SIGNATURE;
+
 /// Header of a daicon table.
-#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
+#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Header {
-    next: u64,
+    signature: u32,
     capacity: u8,
     next_capacity: u8,
     length: u8,
-    // Rerseved values padded to 2 * 8 bytes, we can decide what to do with this later.
-    _reserved0: u8,
-    _reserved1: u32,
+    _reserved: u8,
+    next: u64,
 }
 
 impl Header {
+    /// Get the magic signature field of this table.
+    pub fn signature(&self) -> u32 {
+        self.signature
+    }
+
+    pub fn set_signature(&mut self, value: u32) {
+        self.signature = value;
+    }
+
     /// Get the amount of entries of allocated space available in this table.
     pub fn capacity(&self) -> u8 {
         self.capacity
@@ -50,5 +60,14 @@ impl Header {
 
     pub fn set_next_capacity(&mut self, value: u8) {
         self.next_capacity = value;
+    }
+}
+
+impl Default for Header {
+    fn default() -> Self {
+        Self {
+            signature: SIGNATURE,
+            ..Self::zeroed()
+        }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "daicon"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "Daicon low-level types, for zero-copy reading and writing"
 readme = "../../README.md"

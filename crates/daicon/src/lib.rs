@@ -11,5 +11,5 @@ mod header;
 
 pub use self::{entry::Entry, header::Header};
 
-/// Signature of a daicon file, should be inserted and validated at the top of a file.
-pub const SIGNATURE: &[u8] = b"\xFFdaicon0";
+/// Magic signature of a daicon 0.x.x header, literally equivalent to 0xFF followed by ASCII "dc0".
+pub const SIGNATURE: u32 = 0x306364FF;

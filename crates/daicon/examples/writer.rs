@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Error;
 use bytemuck::bytes_of;
-use daicon::{Entry, Header, SIGNATURE};
+use daicon::{Entry, Header};
 use uuid::{uuid, Uuid};
 
 const TEXT: &str = include_str!("lipsum.txt");
@@ -16,9 +16,8 @@ const TEXT_EXAMPLE_ID: Uuid = uuid!("37cb72a4-caab-440c-8b7c-869019ed348e");
 const METADATA_EXAMPLE_ID: Uuid = uuid!("c18af4e8-fced-4890-b18c-547fcc7df67b");
 
 fn main() -> Result<(), Error> {
-    // Create and write signature
+    // Create the target file
     let mut file = File::create("./lorem.example-text")?;
-    file.write_all(SIGNATURE)?;
 
     // Write the component table, pre-allocating space for 2 entries
     let mut header = Header::default();
