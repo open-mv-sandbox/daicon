@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.7.0
+
+- Remove pre-fetch hint, favoring same heuristic overshoot as the base table.
+- Update for prototyping work-in-progress 0.2.0 specification.
+
 ## 0.6.0
 
 - Move file signature to header.

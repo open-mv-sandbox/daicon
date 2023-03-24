@@ -1,4 +1,4 @@
-# Daicon Format
+# Daicon - Specification
 
 > 🚧 This document is currently out-of-sync with the reference implementation, which is prototyping upcoming version 0.2.0.
 

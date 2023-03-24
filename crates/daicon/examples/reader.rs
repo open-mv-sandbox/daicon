@@ -77,7 +77,7 @@ fn read_table(file: &mut File, offset: u64) -> Result<(Header, Vec<Entry>), Erro
 
     // Read entries
     let mut entries = Vec::new();
-    for _ in 0..header.length() {
+    for _ in 0..header.valid() {
         let mut entry = Entry::zeroed();
         file.read_exact(bytes_of_mut(&mut entry))?;
 

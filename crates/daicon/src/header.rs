@@ -5,14 +5,15 @@ use bytemuck::{Pod, Zeroable};
 use crate::SIGNATURE;
 
 /// Header of a daicon table.
+///
+/// When creating a new table for writing, using the `Default` implementation will automatically
+/// fill the signature.
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Header {
     signature: u32,
-    capacity: u8,
-    next_capacity: u8,
-    length: u8,
-    _reserved: u8,
+    capacity: u16,
+    valid: u16,
     next: u64,
 }
 
@@ -27,21 +28,21 @@ impl Header {
     }
 
     /// Get the amount of entries of allocated space available in this table.
-    pub fn capacity(&self) -> u8 {
+    pub fn capacity(&self) -> u16 {
         self.capacity
     }
 
-    pub fn set_capacity(&mut self, value: u8) {
+    pub fn set_capacity(&mut self, value: u16) {
         self.capacity = value;
     }
 
     /// Get the amount of entries that contain valid data in this table.
-    pub fn length(&self) -> u8 {
-        self.length
+    pub fn valid(&self) -> u16 {
+        self.valid
     }
 
-    pub fn set_length(&mut self, value: u8) {
-        self.length = value;
+    pub fn set_valid(&mut self, value: u16) {
+        self.valid = value;
     }
 
     /// Get the offset of the next table.
@@ -53,13 +54,9 @@ impl Header {
         self.next = value.map(|v| v.get()).unwrap_or(0);
     }
 
-    /// Get the expected `capacity` value of the next table, for efficient pre-fetching.
-    pub fn next_capacity(&self) -> u8 {
-        self.next_capacity
-    }
-
-    pub fn set_next_capacity(&mut self, value: u8) {
-        self.next_capacity = value;
+    /// Returns true if this header has a valid signature.
+    pub fn is_valid(&self) -> bool {
+        self.signature == SIGNATURE
     }
 }
 

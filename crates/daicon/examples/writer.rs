@@ -22,7 +22,7 @@ fn main() -> Result<(), Error> {
     // Write the component table, pre-allocating space for 2 entries
     let mut header = Header::default();
     header.set_capacity(2);
-    header.set_length(2);
+    header.set_valid(2);
     file.write_all(bytes_of(&header))?;
 
     // Skip forward to the end of the table

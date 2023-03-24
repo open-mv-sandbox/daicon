@@ -2,7 +2,7 @@
 
 Daicon lets you list and find a file's contents by UUIDs.
 
-[Read the daicon specification draft here!](docs/daicon.md)
+[Read the daicon documentation here!](docs/index.md)
 
 ## Status
 
