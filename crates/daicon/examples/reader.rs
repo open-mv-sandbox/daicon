@@ -23,7 +23,7 @@ fn main() -> Result<(), Error> {
     // Read the text data
     let mut data = vec![0u8; entry.size() as usize];
     let offset = entry.offset();
-    file.seek(SeekFrom::Start(offset))?;
+    file.seek(SeekFrom::Start(offset as u64))?;
     file.read_exact(&mut data)?;
 
     // Convert to UTF-8 and print

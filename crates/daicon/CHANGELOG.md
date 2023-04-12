@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.8.0
+
+- Reduce size of offset and size to 32 bit.
+- Update for prototyping work-in-progress 0.2.0 specification.
+
 ## 0.7.0
 
 - Remove pre-fetch hint, favoring same heuristic overshoot as the base table.

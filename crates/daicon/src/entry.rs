@@ -3,11 +3,11 @@ use uuid::Uuid;
 
 /// Entry in a daicon table.
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
-#[repr(C, align(8))]
+#[repr(C)]
 pub struct Entry {
     id: [u8; 16],
-    offset: u64,
-    size: u64,
+    offset: u32,
+    size: u32,
 }
 
 impl Entry {
@@ -21,20 +21,20 @@ impl Entry {
     }
 
     /// Get the offset of the entry.
-    pub fn offset(&self) -> u64 {
+    pub fn offset(&self) -> u32 {
         self.offset
     }
 
-    pub fn set_offset(&mut self, value: u64) {
+    pub fn set_offset(&mut self, value: u32) {
         self.offset = value;
     }
 
     /// Get the size of the entry in bytes.
-    pub fn size(&self) -> u64 {
+    pub fn size(&self) -> u32 {
         self.size
     }
 
-    pub fn set_size(&mut self, value: u64) {
+    pub fn set_size(&mut self, value: u32) {
         self.size = value;
     }
 }

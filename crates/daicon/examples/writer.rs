@@ -41,7 +41,7 @@ fn main() -> Result<(), Error> {
     let mut entry = Entry::default();
     entry.set_id(TEXT_EXAMPLE_ID);
     entry.set_offset(text_offset);
-    entry.set_size(TEXT.as_bytes().len() as u64);
+    entry.set_size(TEXT.as_bytes().len() as u32);
     file.write_all(bytes_of(&entry))?;
 
     // Write an additional metadata entry
@@ -50,14 +50,14 @@ fn main() -> Result<(), Error> {
     let mut entry = Entry::default();
     entry.set_id(METADATA_EXAMPLE_ID);
     entry.set_offset(meta_offset);
-    entry.set_size(METADATA.as_bytes().len() as u64);
+    entry.set_size(METADATA.as_bytes().len() as u32);
     file.write_all(bytes_of(&entry))?;
 
     Ok(())
 }
 
-fn write_entry_data(file: &mut File, data: &[u8]) -> Result<u64, Error> {
+fn write_entry_data(file: &mut File, data: &[u8]) -> Result<u32, Error> {
     let offset = file.stream_position()?;
     file.write_all(data)?;
-    Ok(offset)
+    Ok(offset as u32)
 }
