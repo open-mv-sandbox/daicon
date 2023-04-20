@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.9.0
+
+- Reduce size of next table offset to 32 bit.
+- Update for prototyping work-in-progress 0.2.0 specification.
+
 ## 0.8.0
 
 - Reduce size of offset and size to 32 bit.

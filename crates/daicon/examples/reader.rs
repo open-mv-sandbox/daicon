@@ -61,8 +61,8 @@ fn read_components(file: &mut File) -> Result<HashMap<Uuid, Entry>, Error> {
     Ok(entries)
 }
 
-fn read_table(file: &mut File, offset: u64) -> Result<(Header, Vec<Entry>), Error> {
-    file.seek(SeekFrom::Start(offset))?;
+fn read_table(file: &mut File, offset: u32) -> Result<(Header, Vec<Entry>), Error> {
+    file.seek(SeekFrom::Start(offset as u64))?;
 
     // Read header
     let mut header = Header::zeroed();
