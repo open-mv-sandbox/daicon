@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, OpenMode, SourceAction, SourceMessage};
 use ptero_file::open_system_file;
-use stewart::{Addr, State, System, SystemOptions, World};
+use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -27,8 +27,7 @@ pub struct SetCommand {
 pub fn start(world: &mut World, command: SetCommand) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 
-    let id = world.create(None)?;
-    let system = world.register(SetCommandSystem, id, SystemOptions::default());
+    let id = world.create(None, Options::default())?;
     let addr = Addr::new(id);
 
     // Open the target file
@@ -47,22 +46,24 @@ pub fn start(world: &mut World, command: SetCommand) -> Result<(), Error> {
     };
     world.send(source, message);
 
-    world.start(id, system, command)?;
+    let actor = SetCommandActor { id };
+    world.start(id, actor)?;
 
     Ok(())
 }
 
-struct SetCommandSystem;
+struct SetCommandActor {
+    id: ActorId,
+}
 
-impl System for SetCommandSystem {
-    type Instance = SetCommand;
+impl Actor for SetCommandActor {
     type Message = Message;
 
     fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
-        while let Some((actor, message)) = state.next() {
+        while let Some(message) = state.next() {
             match message {
                 Message::Write(()) => {
-                    world.stop(actor)?;
+                    world.stop(self.id)?;
                 }
             }
         }

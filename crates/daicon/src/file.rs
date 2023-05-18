@@ -1,19 +1,15 @@
-use std::{collections::BTreeSet, io::Write, mem::size_of};
+use std::{io::Write, mem::size_of};
 
-use anyhow::{Context as _, Error};
+use anyhow::Error;
 use bytemuck::{bytes_of, Zeroable};
 use daicon_types::{Entry, Header};
 use ptero_file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
-use stewart::{ActorId, Addr, State, System, SystemId, SystemOptions, World};
+use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::{map, map_once, when};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{
-    cache::CachedTable,
-    set::{start_set_task, SetTaskSystem},
-    SourceAction, SourceMessage,
-};
+use crate::{cache::CachedTable, set::start_set_task, SourceAction, SourceMessage};
 
 /// Open a file as a daicon source.
 ///
@@ -25,11 +21,8 @@ pub fn open_file_source(
     file: Addr<FileMessage>,
     mode: OpenMode,
 ) -> Result<Addr<SourceMessage>, Error> {
-    let id = world.create(parent)?;
+    let id = world.create(parent, Options::default())?;
     let addr = Addr::new(id);
-
-    let system = world.register(FileSourceSystem, id, SystemOptions::default());
-    let set_task = world.register(SetTaskSystem, id, SystemOptions::default());
 
     let source = map(world, Some(id), addr, Message::SourceMessage)?;
     let mut table = None;
@@ -72,9 +65,7 @@ pub fn open_file_source(
             let action = FileAction::Write {
                 location: WriteLocation::Offset(0),
                 data,
-                on_result: when(world, Some(id), SystemOptions::default(), |_, _, _| {
-                    Ok(false)
-                })?,
+                on_result: when(world, Some(id), Options::default(), |_, _| Ok(false))?,
             };
             let message = FileMessage {
                 id: Uuid::new_v4(),
@@ -90,7 +81,6 @@ pub fn open_file_source(
     // Start the root manager actor
     let instance = FileSource {
         id,
-        set_task,
 
         write_header_result: map(world, Some(id), addr, Message::WriteHeaderResult)?,
         file,
@@ -99,7 +89,7 @@ pub fn open_file_source(
         get_tasks: Vec::new(),
         pending_slots: Vec::new(),
     };
-    world.start(id, system, instance)?;
+    world.start(id, instance)?;
 
     Ok(source)
 }
@@ -109,47 +99,8 @@ pub enum OpenMode {
     Create,
 }
 
-struct FileSourceSystem;
-
-impl System for FileSourceSystem {
-    type Instance = FileSource;
-    type Message = Message;
-
-    #[instrument("file-source", skip_all)]
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
-        let mut changed = BTreeSet::new();
-
-        while let Some((actor, message)) = state.next() {
-            let instance = state.get_mut(actor).context("failed to get instance")?;
-
-            match message {
-                Message::SourceMessage(message) => {
-                    instance.on_source_message(world, message)?;
-                }
-                Message::ReadTableResult(result) => {
-                    instance.on_read_table(result)?;
-                }
-                Message::WriteHeaderResult(result) => {
-                    instance.on_write(result)?;
-                }
-            }
-
-            changed.insert(actor);
-        }
-
-        // Check if we can resolve any get requests
-        for actor in changed {
-            let instance = state.get_mut(actor).context("failed to get instance")?;
-            instance.check_pending(world);
-        }
-
-        Ok(())
-    }
-}
-
 struct FileSource {
     id: ActorId,
-    set_task: SystemId,
 
     write_header_result: Addr<WriteResult>,
     file: Addr<FileMessage>,
@@ -159,6 +110,32 @@ struct FileSource {
 
     // TODO: Stateful temporary tasks should also be actors, most of set already is
     get_tasks: Vec<(Uuid, Addr<ReadResult>)>,
+}
+
+impl Actor for FileSource {
+    type Message = Message;
+
+    #[instrument("file-source", skip_all)]
+    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
+        while let Some(message) = state.next() {
+            match message {
+                Message::SourceMessage(message) => {
+                    self.on_source_message(world, message)?;
+                }
+                Message::ReadTableResult(result) => {
+                    self.on_read_table(result)?;
+                }
+                Message::WriteHeaderResult(result) => {
+                    self.on_write(result)?;
+                }
+            }
+        }
+
+        // Check if we can resolve any get requests
+        self.check_pending(world);
+
+        Ok(())
+    }
 }
 
 impl FileSource {
@@ -179,15 +156,7 @@ impl FileSource {
             } => {
                 event!(Level::INFO, ?id, bytes = data.len(), "received set");
 
-                let addr = start_set_task(
-                    world,
-                    Some(self.id),
-                    self.set_task,
-                    self.file,
-                    id,
-                    data,
-                    on_result,
-                )?;
+                let addr = start_set_task(world, Some(self.id), self.file, id, data, on_result)?;
                 self.pending_slots.push(addr);
             }
         }

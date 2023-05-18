@@ -1,8 +1,8 @@
-use anyhow::{Context as _, Error};
+use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, OpenMode, SourceAction, SourceMessage};
 use ptero_file::{open_system_file, ReadResult};
-use stewart::{Addr, State, System, SystemOptions, World};
+use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -27,9 +27,7 @@ pub struct GetCommand {
 pub fn start(world: &mut World, command: GetCommand) -> Result<(), Error> {
     event!(Level::INFO, "getting file from package");
 
-    let id = world.create(None)?;
-
-    let system = world.register(GetCommandSystem, id, SystemOptions::default());
+    let id = world.create(None, Options::default())?;
     let addr = Addr::new(id);
 
     // Open the target file
@@ -46,26 +44,28 @@ pub fn start(world: &mut World, command: GetCommand) -> Result<(), Error> {
     };
     world.send(source, message);
 
-    world.start(id, system, command)?;
+    let actor = GetCommandActor { id, command };
+    world.start(id, actor)?;
 
     Ok(())
 }
 
-struct GetCommandSystem;
+struct GetCommandActor {
+    id: ActorId,
+    command: GetCommand,
+}
 
-impl System for GetCommandSystem {
-    type Instance = GetCommand;
+impl Actor for GetCommandActor {
     type Message = Message;
 
     fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
-        while let Some((actor, message)) = state.next() {
+        while let Some(message) = state.next() {
             match message {
                 Message::Read(result) => {
-                    let instance = state.get_mut(actor).context("failed to get instance")?;
-                    std::fs::write(&instance.output, result.data)?;
+                    std::fs::write(&self.command.output, result.data)?;
 
                     // We're done
-                    world.stop(actor)?;
+                    world.stop(self.id)?;
                 }
             }
         }

@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Error};
-use stewart::{ActorId, Addr, State, System, SystemOptions, World};
+use stewart::{Actor, ActorId, Addr, Options, State, World};
 use tracing::{event, instrument, Level};
 
 use crate::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
@@ -16,8 +16,7 @@ pub fn open_system_file(
     path: String,
     truncate: bool,
 ) -> Result<Addr<FileMessage>, Error> {
-    let actor = world.create(parent)?;
-    let system = world.register(SystemFileSystem, actor, SystemOptions::default());
+    let id = world.create(parent, Options::default())?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -27,26 +26,25 @@ pub fn open_system_file(
         .open(path)
         .context("failed to open system file for writing")?;
 
-    let instance = SystemFile { file };
-    world.start(actor, system, instance)?;
+    let actor = SystemFile { file };
+    world.start(id, actor)?;
 
-    let addr = Addr::new(actor);
+    let addr = Addr::new(id);
     Ok(addr)
 }
 
-struct SystemFileSystem;
+struct SystemFile {
+    file: File,
+}
 
-impl System for SystemFileSystem {
-    type Instance = SystemFile;
+impl Actor for SystemFile {
     type Message = FileMessage;
 
     #[instrument("system-file", skip_all)]
     fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
         event!(Level::INFO, "handling messages");
 
-        while let Some((actor, message)) = state.next() {
-            let instance = state.get_mut(actor).context("failed to get instance")?;
-
+        while let Some(message) = state.next() {
             match message.action {
                 FileAction::Read {
                     offset,
@@ -58,8 +56,8 @@ impl System for SystemFileSystem {
 
                     let mut data = vec![0u8; size as usize];
 
-                    instance.file.seek(SeekFrom::Start(offset))?;
-                    read_exact_eof(&mut instance.file, &mut data)?;
+                    self.file.seek(SeekFrom::Start(offset))?;
+                    read_exact_eof(&mut self.file, &mut data)?;
 
                     // Reply result
                     let result = ReadResult {
@@ -79,11 +77,11 @@ impl System for SystemFileSystem {
                         WriteLocation::Offset(offset) => SeekFrom::Start(offset),
                         WriteLocation::Append => SeekFrom::End(0),
                     };
-                    instance.file.seek(from)?;
-                    let offset = instance.file.stream_position()?;
+                    self.file.seek(from)?;
+                    let offset = self.file.stream_position()?;
 
                     // Perform the write
-                    instance.file.write_all(&data)?;
+                    self.file.write_all(&data)?;
 
                     // Reply result
                     let result = WriteResult {
@@ -97,10 +95,6 @@ impl System for SystemFileSystem {
 
         Ok(())
     }
-}
-
-struct SystemFile {
-    file: File,
 }
 
 /// Copy of read_exact except allowing for EOF.
