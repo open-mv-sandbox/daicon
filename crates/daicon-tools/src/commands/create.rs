@@ -1,9 +1,8 @@
 use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, OpenMode};
-use ptero_file::{FileMessage, SystemFileServiceMessage};
-use stewart::{Addr, State, System, SystemOptions, World};
-use stewart_utils::map_once;
+use ptero_file::open_system_file;
+use stewart::{State, System, SystemOptions, World};
 use tracing::{event, instrument, Level};
 
 /// Create a new daicon file.
@@ -14,25 +13,15 @@ pub struct CreateCommand {
     target: String,
 }
 
-#[instrument("create-command", skip_all)]
-pub fn start(
-    world: &mut World,
-    system_file: Addr<SystemFileServiceMessage>,
-    command: CreateCommand,
-) -> Result<(), Error> {
+#[instrument("start_create_command", skip_all)]
+pub fn start(world: &mut World, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
     let id = world.create(None)?;
-    let addr = Addr::new(id);
 
     // Open the target file
-    let message = SystemFileServiceMessage::Open {
-        parent: Some(id),
-        path: command.target.clone(),
-        truncate: true,
-        on_result: map_once(world, Some(id), addr, Message::FileOpened)?,
-    };
-    world.send(system_file, message);
+    let file = open_system_file(world, Some(id), command.target.clone(), true)?;
+    let _source = open_file_source(world, Some(id), file, OpenMode::Create)?;
 
     // Start the command actor
     let system = world.register(CreateCommandSystem, id, SystemOptions::default());
@@ -45,19 +34,9 @@ struct CreateCommandSystem;
 
 impl System for CreateCommandSystem {
     type Instance = CreateCommand;
-    type Message = Message;
+    type Message = ();
 
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
-        while let Some((actor, message)) = state.next() {
-            let Message::FileOpened(file) = message;
-
-            open_file_source(world, Some(actor), file, OpenMode::Create)?;
-        }
-
+    fn process(&mut self, _world: &mut World, _state: &mut State<Self>) -> Result<(), Error> {
         Ok(())
     }
-}
-
-enum Message {
-    FileOpened(Addr<FileMessage>),
 }

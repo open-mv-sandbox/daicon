@@ -1,4 +1,4 @@
-//! Pterodactil implementation of the "daicon" format.
+//! Rust implementation of the "daicon" format.
 
 mod cache;
 mod file;

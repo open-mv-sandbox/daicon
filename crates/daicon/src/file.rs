@@ -37,6 +37,8 @@ pub fn open_file_source(
     // TODO: this is also the validation step, respond if we correctly validated
     match mode {
         OpenMode::ReadWrite => {
+            event!(Level::DEBUG, "reading first header");
+
             // Immediately start table read
             let size = (size_of::<Header>() + (size_of::<Entry>() * 256)) as u64;
             let message = FileMessage {
@@ -50,6 +52,8 @@ pub fn open_file_source(
             world.send(file, message);
         }
         OpenMode::Create => {
+            event!(Level::DEBUG, "writing stub");
+
             // Start writing immediately at the given offset
             let create_table = CachedTable::new(0, 256);
             let mut data = Vec::new();
