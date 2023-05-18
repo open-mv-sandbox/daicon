@@ -3,3 +3,4 @@ Cargo.lock
 
 # Example run artifacts
 *.example-text
+*.example-daicon

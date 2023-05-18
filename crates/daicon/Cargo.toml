@@ -1,15 +1,14 @@
 [package]
 name = "daicon"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2021"
-description = "Daicon low-level types, for zero-copy reading and writing"
-readme = "../../README.md"
-repository = "https://github.com/open-mv-sandbox/daicon"
-license = "MIT OR Apache-2.0"
 
 [dependencies]
-bytemuck = { workspace = true, features = ["derive"] }
-uuid.workspace = true
-
-[dev-dependencies]
 anyhow.workspace = true
+bytemuck.workspace = true
+daicon-types.workspace = true
+stewart.workspace = true
+stewart-utils.workspace = true
+tracing.workspace = true
+uuid = { workspace = true, features = ["v4"] }
+ptero-file.workspace = true

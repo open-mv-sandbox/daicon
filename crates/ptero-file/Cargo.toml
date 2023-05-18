@@ -1,0 +1,11 @@
+[package]
+name = "ptero-file"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+stewart.workspace = true
+stewart-utils.workspace = true
+tracing.workspace = true
+uuid.workspace = true
