@@ -3,13 +3,17 @@ use std::{io::Write, mem::size_of};
 use anyhow::Error;
 use bytemuck::{bytes_of, Zeroable};
 use daicon_types::{Entry, Header};
-use ptero_file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::{map, map_once, when};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{cache::CachedTable, set::start_set_task, SourceAction, SourceMessage};
+use crate::{
+    cache::CachedTable,
+    io::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
+    set::start_set_task,
+    SourceAction, SourceMessage,
+};
 
 /// Open a file as a daicon source.
 ///
@@ -109,7 +113,7 @@ struct FileSource {
     pending_slots: Vec<Addr<u32>>,
 
     // TODO: Stateful temporary tasks should also be actors, most of set already is
-    get_tasks: Vec<(Uuid, Addr<ReadResult>)>,
+    get_tasks: Vec<(u64, Addr<ReadResult>)>,
 }
 
 impl Actor for FileSource {
@@ -146,7 +150,7 @@ impl FileSource {
     ) -> Result<(), Error> {
         match message.action {
             SourceAction::Get { id, on_result } => {
-                event!(Level::INFO, ?id, "received get");
+                event!(Level::INFO, "received get {:#16x}", id);
                 self.get_tasks.push((id, on_result));
             }
             SourceAction::Set {
@@ -154,7 +158,7 @@ impl FileSource {
                 data,
                 on_result,
             } => {
-                event!(Level::INFO, ?id, bytes = data.len(), "received set");
+                event!(Level::INFO, bytes = data.len(), "received set {:#16x}", id);
 
                 let addr = start_set_task(world, Some(self.id), self.file, id, data, on_result)?;
                 self.pending_slots.push(addr);
@@ -216,7 +220,7 @@ fn try_read_data(
     world: &mut World,
     file: Addr<FileMessage>,
     table: &mut CachedTable,
-    id: Uuid,
+    id: u64,
     on_result: Addr<ReadResult>,
 ) -> bool {
     let entry = if let Some(entry) = table.find(id) {
@@ -225,11 +229,7 @@ fn try_read_data(
         return false;
     };
 
-    event!(
-        Level::INFO,
-        id = ?entry.id(),
-        "found entry"
-    );
+    event!(Level::INFO, "found entry {:#16x}", entry.id());
 
     // We found a matching entry, start the read to fetch the inner data
     let message = FileMessage {

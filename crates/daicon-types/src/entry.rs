@@ -1,23 +1,22 @@
 use bytemuck::{Pod, Zeroable};
-use uuid::Uuid;
 
 /// Entry in a daicon table.
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Entry {
-    id: [u8; 16],
+    id: u64,
     offset: u32,
     size: u32,
 }
 
 impl Entry {
     /// Get the ID of the entry.
-    pub fn id(&self) -> Uuid {
-        Uuid::from_bytes_le(self.id)
+    pub fn id(&self) -> u64 {
+        self.id
     }
 
-    pub fn set_id(&mut self, value: Uuid) {
-        self.id = value.to_bytes_le();
+    pub fn set_id(&mut self, value: u64) {
+        self.id = value;
     }
 
     /// Get the offset of the entry.

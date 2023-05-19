@@ -1,16 +1,11 @@
-//! Pterodactil file abstraction.
-//!
-//! A "file" is an addressable blob of binary data.
-
-mod buffer;
-mod system;
+//! IO operations interface.
 
 use stewart::Addr;
 use uuid::Uuid;
 
-pub use self::{buffer::open_buffer_file, system::open_system_file};
-
-/// Message to a file actor.
+/// Message to a file reader/writer actor.
+///
+/// A "file" is an addressable blob of binary data, not necessarily a system file.
 pub struct FileMessage {
     pub id: Uuid,
     pub action: FileAction,

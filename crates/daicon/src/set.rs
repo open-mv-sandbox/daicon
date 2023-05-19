@@ -1,18 +1,19 @@
 use anyhow::Error;
 use bytemuck::{bytes_of, Zeroable};
 use daicon_types::Entry;
-use ptero_file::{FileAction, FileMessage, WriteLocation, WriteResult};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::{map, map_once};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
+
+use crate::io::{FileAction, FileMessage, WriteLocation, WriteResult};
 
 #[instrument("set-task", skip_all)]
 pub fn start_set_task(
     world: &mut World,
     parent: Option<ActorId>,
     file: Addr<FileMessage>,
-    id: Uuid,
+    id: u64,
     data: Vec<u8>,
     on_result: Addr<()>,
 ) -> Result<Addr<u32>, Error> {

@@ -6,7 +6,6 @@ use std::{
 use anyhow::Error;
 use bytemuck::{bytes_of_mut, cast_slice_mut, Zeroable};
 use daicon_types::{Entry, Header};
-use uuid::Uuid;
 
 /// In-memory cached representation of a table.
 pub struct CachedTable {
@@ -59,7 +58,7 @@ impl CachedTable {
         Ok(table)
     }
 
-    pub fn find(&self, id: Uuid) -> Option<Entry> {
+    pub fn find(&self, id: u64) -> Option<Entry> {
         self.entries.iter().find(|e| e.id() == id).cloned()
     }
 

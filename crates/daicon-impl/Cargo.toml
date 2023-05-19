@@ -1,5 +1,5 @@
 [package]
-name = "ptero-file"
+name = "daicon-impl"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,4 @@ stewart.workspace = true
 stewart-utils.workspace = true
 tracing.workspace = true
 uuid.workspace = true
+daicon.workspace = true

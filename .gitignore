@@ -2,5 +2,4 @@ target
 Cargo.lock
 
 # Example run artifacts
-*.example-text
-*.example-daicon
+*.example

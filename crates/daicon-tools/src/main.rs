@@ -1,6 +1,6 @@
 mod commands;
 
-use anyhow::Error;
+use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};
 use commands::get::GetCommand;
 use stewart::World;
@@ -64,4 +64,14 @@ enum Command {
     Create(CreateCommand),
     Set(SetCommand),
     Get(GetCommand),
+}
+
+fn parse_hex(str: &str) -> Result<u64, Error> {
+    if str.len() != 18 || !str.starts_with("0x") {
+        bail!("input must be a hexadecimal, starting with 0x, followed by 16 characters");
+    }
+
+    let result = u64::from_str_radix(&str[2..], 16)?;
+
+    Ok(result)
 }
