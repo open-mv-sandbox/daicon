@@ -5,13 +5,13 @@ If you want a technical specification instead, read the specification document.
 
 ## Motivation
 
-Daicon is a binary format that associates sub-sections of a file with UUIDs.
-These descriptions can be updated atomically across file caches, and enables direct offset
-indexing.
-This makes daicon a good format for use with CDN caches, allowing clients to query a file and
-fetch multiple regions of it at the same time, without fetching the entire file.
+Daicon is a binary header format, that indexes regions of a binary blob by 8-byte IDs.
+These indices are designed to be updated atomically across caches, such as CDNs.
 
-Some example use cases of daicon are:
+Daicon is designed to work with HTTP range requests.
+This lets you pull in just the data you need, all at the same time.
+
+Some example uses of daicon include:
 
 - Packaging and delivering large content databases from CDNs.
-- Letting different tools extend a format by additing components identified by their UUID.
+- Creating extendable file formats, by adding components identified by their ID.

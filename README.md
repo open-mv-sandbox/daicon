@@ -1,8 +1,8 @@
 # Daicon
 
-Daicon lets you list and find a file's contents by UUIDs.
+Index regions of a binary blob by ID.
 
-[Read the daicon documentation here!](docs/index.md)
+[Read the daicon format documentation here!](docs/index.md)
 
 ## Status
 

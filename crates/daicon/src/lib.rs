@@ -1,4 +1,8 @@
-//! Rust implementation of the daicon format.
+//! # Daicon
+//!
+//! Index regions of a binary blob by ID.
+//!
+//! This library is the reference Rust reader/writer implementation of the daicon format.
 
 mod cache;
 pub mod file;
