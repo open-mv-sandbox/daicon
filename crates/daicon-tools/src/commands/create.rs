@@ -1,9 +1,10 @@
 use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, OpenMode};
-use daicon_impl::open_system_file;
 use stewart::{Actor, Options, State, World};
 use tracing::{event, instrument, Level};
+
+use crate::system::open_system_file;
 
 /// Create a new daicon file.
 #[derive(Args, Debug)]

@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     cache::CachedTable,
-    io::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
+    file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
     set::start_set_task,
     SourceAction, SourceMessage,
 };

@@ -1,4 +1,5 @@
 mod commands;
+mod system;
 
 use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};

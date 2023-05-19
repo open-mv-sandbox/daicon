@@ -1,11 +1,11 @@
-//! IO operations interface.
+//! File operations interface.
+//!
+//! A "file" is an addressable blob of binary data, not necessarily a system file.
 
 use stewart::Addr;
 use uuid::Uuid;
 
 /// Message to a file reader/writer actor.
-///
-/// A "file" is an addressable blob of binary data, not necessarily a system file.
 pub struct FileMessage {
     pub id: Uuid,
     pub action: FileAction,

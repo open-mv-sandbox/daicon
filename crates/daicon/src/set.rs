@@ -6,7 +6,7 @@ use stewart_utils::{map, map_once};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::io::{FileAction, FileMessage, WriteLocation, WriteResult};
+use crate::file::{FileAction, FileMessage, WriteLocation, WriteResult};
 
 #[instrument("set-task", skip_all)]
 pub fn start_set_task(

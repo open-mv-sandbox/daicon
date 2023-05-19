@@ -1,13 +1,12 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{io::ReadResult, open_file_source, OpenMode, SourceAction, SourceMessage};
-use daicon_impl::open_system_file;
+use daicon::{file::ReadResult, open_file_source, OpenMode, SourceAction, SourceMessage};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::parse_hex;
+use crate::{parse_hex, system::open_system_file};
 
 /// Get an entry from a daicon file.
 #[derive(Args, Debug)]

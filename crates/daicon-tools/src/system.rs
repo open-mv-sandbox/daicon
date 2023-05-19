@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Error};
-use daicon::io::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
+use daicon::file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use tracing::{event, instrument, Level};
 

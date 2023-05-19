@@ -1,16 +1,16 @@
 //! Rust implementation of the daicon format.
 
 mod cache;
-mod file;
-pub mod io;
+pub mod file;
+mod file_source;
 mod set;
 
 use stewart::Addr;
 use uuid::Uuid;
 
-use crate::io::ReadResult;
+use crate::file::ReadResult;
 
-pub use self::file::{open_file_source, OpenMode};
+pub use self::file_source::{open_file_source, OpenMode};
 
 pub struct SourceMessage {
     pub id: Uuid,
