@@ -2,7 +2,7 @@
 name = "daicon"
 version = "0.10.0"
 edition = "2021"
-description = "Index regions of a binary blob by ID"
+description = "Reference rust reader/writer implementation of the daicon format"
 readme = "../../README.md"
 repository = "https://github.com/open-mv-sandbox/daicon"
 license = "MIT OR Apache-2.0"

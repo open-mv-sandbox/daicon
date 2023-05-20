@@ -13,7 +13,7 @@ pub fn start_set_task(
     world: &mut World,
     parent: Option<ActorId>,
     file: Addr<FileMessage>,
-    id: u64,
+    id: u32,
     data: Vec<u8>,
     on_result: Addr<()>,
 ) -> Result<Addr<u32>, Error> {

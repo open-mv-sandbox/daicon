@@ -4,18 +4,18 @@ use bytemuck::{Pod, Zeroable};
 #[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Entry {
-    id: u64,
+    id: u32,
     offset: u32,
     size: u32,
 }
 
 impl Entry {
     /// Get the ID of the entry.
-    pub fn id(&self) -> u64 {
+    pub fn id(&self) -> u32 {
         self.id
     }
 
-    pub fn set_id(&mut self, value: u64) {
+    pub fn set_id(&mut self, value: u32) {
         self.id = value;
     }
 

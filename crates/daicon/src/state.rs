@@ -7,8 +7,26 @@ use anyhow::Error;
 use bytemuck::{bytes_of_mut, cast_slice_mut, Zeroable};
 use daicon_types::{Entry, Header};
 
-/// In-memory cached representation of a table.
-pub struct CachedTable {
+pub struct SourceState {
+    table: Option<TableState>,
+}
+
+impl SourceState {
+    pub fn new() -> Self {
+        Self { table: None }
+    }
+
+    // TODO: Refactor into utilities
+    pub fn table_mut(&mut self) -> Option<&mut TableState> {
+        self.table.as_mut()
+    }
+
+    pub fn set_table(&mut self, table: TableState) {
+        self.table = Some(table);
+    }
+}
+
+pub struct TableState {
     offset: u32,
     entries: Vec<Entry>,
     entries_meta: Vec<EntryMeta>,
@@ -20,7 +38,7 @@ pub struct EntryMeta {
     allocated: bool,
 }
 
-impl CachedTable {
+impl TableState {
     pub fn new(offset: u32, capacity: usize) -> Self {
         Self {
             offset,
@@ -58,7 +76,7 @@ impl CachedTable {
         Ok(table)
     }
 
-    pub fn find(&self, id: u64) -> Option<Entry> {
+    pub fn find(&self, id: u32) -> Option<Entry> {
         self.entries.iter().find(|e| e.id() == id).cloned()
     }
 

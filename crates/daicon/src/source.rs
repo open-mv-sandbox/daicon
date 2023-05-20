@@ -9,9 +9,9 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    cache::CachedTable,
     file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
     set::start_set_task,
+    state::{SourceState, TableState},
     SourceAction, SourceMessage,
 };
 
@@ -29,7 +29,7 @@ pub fn open_file_source(
     let addr = Addr::new(id);
 
     let source = map(world, Some(id), addr, Message::SourceMessage)?;
-    let mut table = None;
+    let mut state = SourceState::new();
 
     // TODO: this is also the validation step, respond if we correctly validated
     match mode {
@@ -52,7 +52,7 @@ pub fn open_file_source(
             event!(Level::DEBUG, "writing stub");
 
             // Start writing immediately at the given offset
-            let create_table = CachedTable::new(0, 256);
+            let create_table = TableState::new(0, 256);
             let mut data = Vec::new();
 
             // Write the header
@@ -78,7 +78,7 @@ pub fn open_file_source(
             world.send(file, message);
 
             // Store the table
-            table = Some(create_table);
+            state.set_table(create_table);
         }
     }
 
@@ -88,7 +88,7 @@ pub fn open_file_source(
 
         write_header_result: map(world, Some(id), addr, Message::WriteHeaderResult)?,
         file,
-        table,
+        state,
 
         get_tasks: Vec::new(),
         pending_slots: Vec::new(),
@@ -108,12 +108,12 @@ struct FileSource {
 
     write_header_result: Addr<WriteResult>,
     file: Addr<FileMessage>,
-    table: Option<CachedTable>,
+    state: SourceState,
 
     pending_slots: Vec<Addr<u32>>,
 
     // TODO: Stateful temporary tasks should also be actors, most of set already is
-    get_tasks: Vec<(u64, Addr<ReadResult>)>,
+    get_tasks: Vec<(u32, Addr<ReadResult>)>,
 }
 
 impl Actor for FileSource {
@@ -130,7 +130,7 @@ impl Actor for FileSource {
                     self.on_read_table(result)?;
                 }
                 Message::WriteHeaderResult(result) => {
-                    self.on_write(result)?;
+                    self.on_write_header(result)?;
                 }
             }
         }
@@ -150,7 +150,7 @@ impl FileSource {
     ) -> Result<(), Error> {
         match message.action {
             SourceAction::Get { id, on_result } => {
-                event!(Level::INFO, "received get {:#16x}", id);
+                event!(Level::INFO, "received get {:#8x}", id);
                 self.get_tasks.push((id, on_result));
             }
             SourceAction::Set {
@@ -158,7 +158,7 @@ impl FileSource {
                 data,
                 on_result,
             } => {
-                event!(Level::INFO, bytes = data.len(), "received set {:#16x}", id);
+                event!(Level::INFO, bytes = data.len(), "received set {:#8x}", id);
 
                 let addr = start_set_task(world, Some(self.id), self.file, id, data, on_result)?;
                 self.pending_slots.push(addr);
@@ -169,22 +169,23 @@ impl FileSource {
     }
 
     fn on_read_table(&mut self, result: ReadResult) -> Result<(), Error> {
-        let table = CachedTable::read(result.offset as u32, result.data)?;
-        self.table = Some(table);
+        let table = TableState::read(result.offset as u32, result.data)?;
+        self.state.set_table(table);
 
         // TODO: Follow additional headers
 
         Ok(())
     }
 
-    fn on_write(&mut self, _result: WriteResult) -> Result<(), Error> {
+    fn on_write_header(&mut self, _result: WriteResult) -> Result<(), Error> {
         // TODO: Report back entry valid once it falls in the header's valid range
 
         Ok(())
     }
 
     fn check_pending(&mut self, world: &mut World) {
-        let table = if let Some(table) = self.table.as_mut() {
+        // TODO: Refactor into state utilities
+        let table = if let Some(table) = self.state.table_mut() {
             table
         } else {
             return;
@@ -219,8 +220,8 @@ enum Message {
 fn try_read_data(
     world: &mut World,
     file: Addr<FileMessage>,
-    table: &mut CachedTable,
-    id: u64,
+    table: &mut TableState,
+    id: u32,
     on_result: Addr<ReadResult>,
 ) -> bool {
     let entry = if let Some(entry) = table.find(id) {
@@ -229,7 +230,7 @@ fn try_read_data(
         return false;
     };
 
-    event!(Level::INFO, "found entry {:#16x}", entry.id());
+    event!(Level::INFO, "found entry {:#8x}", entry.id());
 
     // We found a matching entry, start the read to fetch the inner data
     let message = FileMessage {
@@ -249,7 +250,7 @@ fn try_allocate_slot(
     world: &mut World,
     write_header_result: Addr<WriteResult>,
     file: Addr<FileMessage>,
-    table: &mut CachedTable,
+    table: &mut TableState,
     on_result: Addr<u32>,
 ) -> bool {
     let index = if let Some(index) = table.try_allocate() {

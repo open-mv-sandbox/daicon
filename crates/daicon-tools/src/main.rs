@@ -67,12 +67,12 @@ enum Command {
     Get(GetCommand),
 }
 
-fn parse_hex(str: &str) -> Result<u64, Error> {
-    if str.len() != 18 || !str.starts_with("0x") {
-        bail!("input must be a hexadecimal, starting with 0x, followed by 16 characters");
+fn parse_hex(str: &str) -> Result<u32, Error> {
+    if str.len() != 10 || !str.starts_with("0x") {
+        bail!("input must be a hexadecimal, starting with 0x, followed by 8 characters");
     }
 
-    let result = u64::from_str_radix(&str[2..], 16)?;
+    let result = u32::from_str_radix(&str[2..], 16)?;
 
     Ok(result)
 }

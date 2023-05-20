@@ -8,16 +8,16 @@ If you want a high-level explanation and primer instead, read the explainer docu
 | Bytes | Description |
 | --- | --- |
 | 12 | Header |
-| N * 16 | Entries |
+| N * 12 | Entries |
 
 ### Header
 
-| Bytes | Description |
+| Bytes | Data Type | Description |
 | --- | --- |
-| 4 | Siagnture, 0x306364FF |
-| 2 | Capacity |
-| 2 | Valid |
-| 4 | Next |
+| 4 | Bytes | Siagnture, 0x306364FF |
+| 2 | Unsigned | Capacity |
+| 2 | Unsigned | Valid |
+| 4 | Unsigned | Next |
 
 #### Signature
 
@@ -37,14 +37,29 @@ The amount of entries that should be seen as valid to read by a reader.
 #### Next
 
 The offset of the start of the next table, or zero if no next table exists.
+Value relative to the start of the table.
 
 ### Entry
 
-| Bytes | Description |
-| --- | --- |
-| 8 | ID |
-| 4 | Offset |
-| 4 | Size |
+| Bytes | Data Type | Description |
+| --- | --- | --- |
+| 4 | Bytes | Identifier |
+| 4 | Unsigned | Offset |
+| 4 | Unsigned | Size |
+
+#### Identifier
+
+User-defined identifier.
+Parsers should handle this as an opaque value.
+
+#### Offset
+
+Offset of the data.
+Value relative to the start of the table.
+
+#### Size
+
+Size of the data in bytes.
 
 ## Change Log
 
