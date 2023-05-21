@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_file_source, OpenMode, SourceAction, SourceMessage};
+use daicon::source::{open_file_source, OpenMode, SourceAction, SourceMessage};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};

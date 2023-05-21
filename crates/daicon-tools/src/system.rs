@@ -6,7 +6,7 @@ use std::{
 use anyhow::{Context, Error};
 use daicon::file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
-use tracing::{event, instrument, Level};
+use tracing::instrument;
 
 #[instrument(skip_all)]
 pub fn open_system_file(
@@ -41,8 +41,6 @@ impl Actor for SystemFile {
 
     #[instrument("system-file", skip_all)]
     fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
-        event!(Level::INFO, "handling messages");
-
         while let Some(message) = state.next() {
             match message.action {
                 FileAction::Read {

@@ -1,7 +1,9 @@
+use std::fmt::{self, Debug, Formatter};
+
 use bytemuck::{Pod, Zeroable};
 
 /// Entry in a daicon table.
-#[derive(Pod, Zeroable, PartialEq, Hash, Debug, Default, Clone, Copy)]
+#[derive(Pod, Zeroable, PartialEq, Hash, Default, Clone, Copy)]
 #[repr(C)]
 pub struct Entry {
     id: u32,
@@ -35,5 +37,15 @@ impl Entry {
 
     pub fn set_size(&mut self, value: u32) {
         self.size = value;
+    }
+}
+
+impl Debug for Entry {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Entry({:#010x}) {{ offset: {:#010x}, size: {} }}",
+            self.id, self.offset, self.size
+        )
     }
 }
