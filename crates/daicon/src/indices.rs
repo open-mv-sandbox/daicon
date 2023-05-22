@@ -13,16 +13,17 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    file::{FileAction, FileMessage, ReadResult, WriteLocation},
+    file::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation},
     OpenMode,
 };
 
+#[instrument("IndexService", skip_all)]
 pub fn start(
     ctx: &mut Context,
     file: Sender<FileMessage>,
     mode: OpenMode,
-) -> Result<Sender<IndicesMessage>, Error> {
-    event!(Level::DEBUG, "starting indices service");
+) -> Result<Sender<IndexServiceMessage>, Error> {
+    event!(Level::DEBUG, "starting");
 
     let (mut ctx, sender) = ctx.create(Options::default())?;
 
@@ -52,7 +53,7 @@ pub fn start(
     }
 
     // Start the actor
-    let actor = IndicesService {
+    let actor = IndexService {
         file,
 
         tables: Vec::new(),
@@ -64,40 +65,40 @@ pub fn start(
     Ok(sender.map(ImplMessage::Message))
 }
 
-pub struct IndicesMessage {
+pub struct IndexServiceMessage {
     pub id: Uuid,
-    pub action: IndicesAction,
+    pub action: IndexAction,
 }
 
-pub enum IndicesAction {
-    Get(GetIndex),
-    Set(SetIndex),
+pub enum IndexAction {
+    Get(IndexGet),
+    Set(IndexSet),
 }
 
-pub struct GetIndex {
+pub struct IndexGet {
     pub id: u32,
     pub on_result: Sender<(Uuid, u64, u32)>,
 }
 
-pub struct SetIndex {
+pub struct IndexSet {
     pub id: u32,
     pub offset: u64,
     pub size: u32,
     pub on_result: Sender<()>,
 }
 
-struct IndicesService {
+struct IndexService {
     file: Sender<FileMessage>,
 
     tables: Vec<Table>,
-    get_tasks: HashMap<Uuid, GetIndex>,
-    set_tasks: HashMap<Uuid, SetIndex>,
+    get_tasks: HashMap<Uuid, IndexGet>,
+    set_tasks: HashMap<Uuid, IndexSet>,
 }
 
-impl Actor for IndicesService {
+impl Actor for IndexService {
     type Message = ImplMessage;
 
-    #[instrument("indices", skip_all)]
+    #[instrument("IndexService", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
@@ -112,14 +113,14 @@ impl Actor for IndicesService {
     }
 }
 
-impl IndicesService {
-    fn on_message(&mut self, message: IndicesMessage) {
+impl IndexService {
+    fn on_message(&mut self, message: IndexServiceMessage) {
         match message.action {
-            IndicesAction::Get(action) => {
+            IndexAction::Get(action) => {
                 event!(Level::DEBUG, "received get {:#010x}", action.id);
                 self.get_tasks.insert(message.id, action);
             }
-            IndicesAction::Set(action) => {
+            IndexAction::Set(action) => {
                 event!(Level::DEBUG, "received set {:#010x}", action.id);
                 self.set_tasks.insert(message.id, action);
             }
@@ -208,7 +209,7 @@ impl Table {
 }
 
 enum ImplMessage {
-    Message(IndicesMessage),
+    Message(IndexServiceMessage),
     ReadResult(ReadResult),
 }
 
@@ -223,13 +224,14 @@ fn read_table(
 ) -> Result<(), Error> {
     // Start reading the first header
     let size = (size_of::<Header>() + (size_of::<Entry>() * 256)) as u64;
+    let action = FileRead {
+        offset: 0,
+        size,
+        on_result: sender.map(ImplMessage::ReadResult),
+    };
     let message = FileMessage {
         id: Uuid::new_v4(),
-        action: FileAction::Read {
-            offset: 0,
-            size,
-            on_result: sender.map(ImplMessage::ReadResult),
-        },
+        action: FileAction::Read(action),
     };
     file.send(ctx, message);
 
@@ -281,14 +283,14 @@ fn write_table(ctx: &mut Context, file: Sender<FileMessage>, table: &Table) -> R
     }
 
     // Send to file for writing
-    let action = FileAction::Write {
+    let action = FileWrite {
         location: WriteLocation::Offset(table.location),
         data,
         on_result: Sender::noop(),
     };
     let message = FileMessage {
         id: Uuid::new_v4(),
-        action,
+        action: FileAction::Write(action),
     };
     file.send(ctx, message);
 

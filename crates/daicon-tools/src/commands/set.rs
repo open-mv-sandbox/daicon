@@ -23,7 +23,7 @@ pub struct SetCommand {
     input: String,
 }
 
-#[instrument("start_set_command", skip_all)]
+#[instrument("SetCommandService", skip_all)]
 pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 
@@ -48,17 +48,18 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     };
     source.send(&mut ctx, message);
 
-    let actor = SetCommandActor {};
+    let actor = SetCommandService {};
     ctx.start(actor)?;
 
     Ok(())
 }
 
-struct SetCommandActor {}
+struct SetCommandService {}
 
-impl Actor for SetCommandActor {
+impl Actor for SetCommandService {
     type Message = Message;
 
+    #[instrument("SetCommandService", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {

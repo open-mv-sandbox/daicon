@@ -13,16 +13,20 @@ pub struct FileMessage {
 
 /// Operation to perform on a file.
 pub enum FileAction {
-    Read {
-        offset: u64,
-        size: u64,
-        on_result: Sender<ReadResult>,
-    },
-    Write {
-        location: WriteLocation,
-        data: Vec<u8>,
-        on_result: Sender<WriteResult>,
-    },
+    Read(FileRead),
+    Write(FileWrite),
+}
+
+pub struct FileRead {
+    pub offset: u64,
+    pub size: u64,
+    pub on_result: Sender<ReadResult>,
+}
+
+pub struct FileWrite {
+    pub location: WriteLocation,
+    pub data: Vec<u8>,
+    pub on_result: Sender<WriteResult>,
 }
 
 /// Location for `Operation::Write`.

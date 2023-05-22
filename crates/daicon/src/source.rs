@@ -6,28 +6,28 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
-    indices::{self, GetIndex, IndicesAction, IndicesMessage, SetIndex},
+    file::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation, WriteResult},
+    indices::{self, IndexAction, IndexGet, IndexServiceMessage, IndexSet},
     OpenMode,
 };
 
 /// Open a file as a daicon source.
 ///
 /// A "source" returns a file from UUIDs. A "file source" uses a file as a source.
-#[instrument("source", skip_all)]
+#[instrument("Source", skip_all)]
 pub fn open_source(
     ctx: &mut Context,
     file: Sender<FileMessage>,
     mode: OpenMode,
 ) -> Result<Sender<SourceMessage>, Error> {
-    event!(Level::INFO, ?mode, "opening source");
+    event!(Level::INFO, ?mode, "opening");
 
     let (mut ctx, sender) = ctx.create(Options::default())?;
 
     let indices = indices::start(&mut ctx, file.clone(), mode)?;
 
     // Start the root manager actor
-    let instance = Source {
+    let actor = Source {
         sender: sender.clone(),
         file,
         indices,
@@ -35,9 +35,9 @@ pub fn open_source(
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
-    ctx.start(instance)?;
+    ctx.start(actor)?;
 
-    let sender = sender.map(Message::Action);
+    let sender = sender.map(ImplMessage::Message);
     Ok(sender)
 }
 
@@ -65,9 +65,9 @@ pub struct SourceSet {
 }
 
 struct Source {
-    sender: Sender<Message>,
+    sender: Sender<ImplMessage>,
     file: Sender<FileMessage>,
-    indices: Sender<IndicesMessage>,
+    indices: Sender<IndexServiceMessage>,
 
     // Ongoing tracked requests
     get_tasks: HashMap<Uuid, GetTask>,
@@ -85,19 +85,19 @@ struct SetTask {
 }
 
 impl Actor for Source {
-    type Message = Message;
+    type Message = ImplMessage;
 
-    #[instrument("source", skip_all)]
+    #[instrument("Source", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
-                Message::Action(message) => {
-                    self.on_source_message(ctx, message)?;
+                ImplMessage::Message(message) => {
+                    self.on_message(ctx, message)?;
                 }
-                Message::GetIndexResult((action_id, offset, size)) => {
+                ImplMessage::GetIndexResult((action_id, offset, size)) => {
                     self.on_get_index_result(ctx, action_id, offset, size)?;
                 }
-                Message::SetWriteDataResult(result) => {
+                ImplMessage::SetWriteDataResult(result) => {
                     self.on_set_write_data_result(ctx, result)?;
                 }
             }
@@ -108,11 +108,7 @@ impl Actor for Source {
 }
 
 impl Source {
-    fn on_source_message(
-        &mut self,
-        ctx: &mut Context,
-        message: SourceMessage,
-    ) -> Result<(), Error> {
+    fn on_message(&mut self, ctx: &mut Context, message: SourceMessage) -> Result<(), Error> {
         match message.action {
             SourceAction::Get(action) => {
                 self.on_get(ctx, message.id, action)?;
@@ -135,14 +131,14 @@ impl Source {
         self.get_tasks.insert(id, task);
 
         // Fetch the entry
-        let on_result = self.sender.clone().map(Message::GetIndexResult);
-        let action = GetIndex {
+        let on_result = self.sender.clone().map(ImplMessage::GetIndexResult);
+        let action = IndexGet {
             id: action.id,
             on_result,
         };
-        let message = IndicesMessage {
+        let message = IndexServiceMessage {
             id,
-            action: IndicesAction::Get(action),
+            action: IndexAction::Get(action),
         };
         self.indices.send(ctx, message);
 
@@ -162,13 +158,14 @@ impl Source {
             .remove(&action_id)
             .context("failed to find get task")?;
 
+        let action = FileRead {
+            offset,
+            size: size as u64,
+            on_result: task.on_result,
+        };
         let message = FileMessage {
             id: action_id,
-            action: FileAction::Read {
-                offset,
-                size: size as u64,
-                on_result: task.on_result,
-            },
+            action: FileAction::Read(action),
         };
         self.file.send(ctx, message);
 
@@ -186,13 +183,14 @@ impl Source {
 
         // Append the data to the file
         let size = action.data.len() as u32;
+        let file_action = FileWrite {
+            location: WriteLocation::Append,
+            data: action.data,
+            on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
+        };
         let message = FileMessage {
             id,
-            action: FileAction::Write {
-                location: WriteLocation::Append,
-                data: action.data,
-                on_result: self.sender.clone().map(Message::SetWriteDataResult),
-            },
+            action: FileAction::Write(file_action),
         };
         self.file.send(ctx, message);
 
@@ -220,15 +218,15 @@ impl Source {
             .context("failed to get pending set task")?;
 
         // Write the entry
-        let action = SetIndex {
+        let action = IndexSet {
             id: task.id,
             offset: result.offset,
             size: task.size,
             on_result: task.on_result.clone(),
         };
-        let message = IndicesMessage {
+        let message = IndexServiceMessage {
             id: result.id,
-            action: IndicesAction::Set(action),
+            action: IndexAction::Set(action),
         };
         self.indices.send(ctx, message);
 
@@ -236,8 +234,8 @@ impl Source {
     }
 }
 
-enum Message {
-    Action(SourceMessage),
+enum ImplMessage {
+    Message(SourceMessage),
     GetIndexResult((Uuid, u64, u32)),
     SetWriteDataResult(WriteResult),
 }

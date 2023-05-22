@@ -14,7 +14,7 @@ pub struct CreateCommand {
     target: String,
 }
 
-#[instrument("start_create_command", skip_all)]
+#[instrument("CreateCommandService", skip_all)]
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
@@ -25,14 +25,18 @@ pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     let _source = open_source(&mut ctx, file, OpenMode::Create)?;
 
     // Start the command actor
-    ctx.start(command)?;
+    let actor = CreateCommandService {};
+    ctx.start(actor)?;
 
     Ok(())
 }
 
-impl Actor for CreateCommand {
+struct CreateCommandService {}
+
+impl Actor for CreateCommandService {
     type Message = ();
 
+    #[instrument("CreateCommandService", skip_all)]
     fn process(&mut self, _ctx: &mut Context, _state: &mut State<Self>) -> Result<(), Error> {
         Ok(())
     }

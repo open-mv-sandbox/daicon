@@ -23,7 +23,7 @@ pub struct GetCommand {
     output: String,
 }
 
-#[instrument("start_get_command", skip_all)]
+#[instrument("GetCommandService", skip_all)]
 pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
     event!(Level::INFO, "getting file from package");
 
@@ -46,19 +46,20 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
     };
     source.send(&mut ctx, message);
 
-    let actor = GetCommandActor { command };
+    let actor = GetCommandService { command };
     ctx.start(actor)?;
 
     Ok(())
 }
 
-struct GetCommandActor {
+struct GetCommandService {
     command: GetCommand,
 }
 
-impl Actor for GetCommandActor {
+impl Actor for GetCommandService {
     type Message = Message;
 
+    #[instrument("GetCommandService", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
