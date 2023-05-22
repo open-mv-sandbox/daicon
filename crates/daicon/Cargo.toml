@@ -12,6 +12,5 @@ anyhow.workspace = true
 bytemuck.workspace = true
 daicon-types.workspace = true
 stewart.workspace = true
-stewart-utils.workspace = true
 tracing.workspace = true
 uuid = { workspace = true, features = ["v4"] }

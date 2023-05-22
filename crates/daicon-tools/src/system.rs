@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{Context as _, Error};
 use daicon::file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
-use stewart::{Actor, Addr, Context, Options, State};
+use stewart::{Actor, Context, Options, Sender, State};
 use tracing::instrument;
 
 #[instrument(skip_all)]
@@ -13,8 +13,8 @@ pub fn open_system_file(
     ctx: &mut Context,
     path: String,
     truncate: bool,
-) -> Result<Addr<FileMessage>, Error> {
-    let mut ctx = ctx.create(Options::default())?;
+) -> Result<Sender<FileMessage>, Error> {
+    let (mut ctx, sender) = ctx.create(Options::default())?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -27,7 +27,7 @@ pub fn open_system_file(
     let actor = SystemFile { file };
     ctx.start(actor)?;
 
-    Ok(ctx.addr()?)
+    Ok(sender)
 }
 
 struct SystemFile {
@@ -60,7 +60,7 @@ impl Actor for SystemFile {
                         offset,
                         data,
                     };
-                    ctx.send(on_result, result);
+                    on_result.send(ctx, result);
                 }
                 FileAction::Write {
                     location,
@@ -83,7 +83,7 @@ impl Actor for SystemFile {
                         id: message.id,
                         offset,
                     };
-                    ctx.send(on_result, result);
+                    on_result.send(ctx, result);
                 }
             }
         }

@@ -1,14 +1,13 @@
 use std::collections::HashMap;
 
 use anyhow::{Context as _, Error};
-use stewart::{Actor, Addr, Context, Options, State, World};
-use stewart_utils::{map, map_once};
+use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
     file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult},
-    indices::{self, IndicesAction, IndicesMessage},
+    indices::{self, GetIndex, IndicesAction, IndicesMessage, SetIndex},
     OpenMode,
 };
 
@@ -18,20 +17,18 @@ use crate::{
 #[instrument("source", skip_all)]
 pub fn open_source(
     ctx: &mut Context,
-    file: Addr<FileMessage>,
+    file: Sender<FileMessage>,
     mode: OpenMode,
-) -> Result<Addr<SourceMessage>, Error> {
+) -> Result<Sender<SourceMessage>, Error> {
     event!(Level::INFO, ?mode, "opening source");
 
-    let mut ctx = ctx.create(Options::default())?;
-    let addr = ctx.addr()?;
+    let (mut ctx, sender) = ctx.create(Options::default())?;
 
-    let source = map(&mut ctx, addr, Message::Action)?;
-
-    let indices = indices::start(&mut ctx, file, mode)?;
+    let indices = indices::start(&mut ctx, file.clone(), mode)?;
 
     // Start the root manager actor
-    let instance = FileSource {
+    let instance = Source {
+        sender: sender.clone(),
         file,
         indices,
 
@@ -40,7 +37,8 @@ pub fn open_source(
     };
     ctx.start(instance)?;
 
-    Ok(source)
+    let sender = sender.map(Message::Action);
+    Ok(sender)
 }
 
 pub struct SourceMessage {
@@ -50,22 +48,26 @@ pub struct SourceMessage {
 
 pub enum SourceAction {
     /// Get the data associated with a UUID.
-    Get {
-        id: u32,
-        /// TODO: Reply with an inner file actor Addr instead.
-        on_result: Addr<ReadResult>,
-    },
+    Get(SourceGet),
     /// Set the data associated with a UUID.
-    Set {
-        id: u32,
-        data: Vec<u8>,
-        on_result: Addr<()>,
-    },
+    Set(SourceSet),
 }
 
-struct FileSource {
-    file: Addr<FileMessage>,
-    indices: Addr<IndicesMessage>,
+pub struct SourceGet {
+    pub id: u32,
+    pub on_result: Sender<ReadResult>,
+}
+
+pub struct SourceSet {
+    pub id: u32,
+    pub data: Vec<u8>,
+    pub on_result: Sender<()>,
+}
+
+struct Source {
+    sender: Sender<Message>,
+    file: Sender<FileMessage>,
+    indices: Sender<IndicesMessage>,
 
     // Ongoing tracked requests
     get_tasks: HashMap<Uuid, GetTask>,
@@ -73,16 +75,16 @@ struct FileSource {
 }
 
 struct GetTask {
-    on_result: Addr<ReadResult>,
+    on_result: Sender<ReadResult>,
 }
 
 struct SetTask {
     id: u32,
     size: u32,
-    on_result: Addr<()>,
+    on_result: Sender<()>,
 }
 
-impl Actor for FileSource {
+impl Actor for Source {
     type Message = Message;
 
     #[instrument("source", skip_all)]
@@ -105,48 +107,44 @@ impl Actor for FileSource {
     }
 }
 
-impl FileSource {
+impl Source {
     fn on_source_message(
         &mut self,
         ctx: &mut Context,
         message: SourceMessage,
     ) -> Result<(), Error> {
         match message.action {
-            SourceAction::Get { id, on_result } => {
-                self.on_get(ctx, message.id, id, on_result)?;
+            SourceAction::Get(action) => {
+                self.on_get(ctx, message.id, action)?;
             }
-            SourceAction::Set {
-                id,
-                data,
-                on_result,
-            } => {
-                self.on_set(ctx, message.id, id, data, on_result)?;
+            SourceAction::Set(action) => {
+                self.on_set(ctx, message.id, action)?;
             }
         }
 
         Ok(())
     }
 
-    fn on_get(
-        &mut self,
-        ctx: &mut Context,
-        action_id: Uuid,
-        id: u32,
-        on_result: Addr<ReadResult>,
-    ) -> Result<(), Error> {
-        event!(Level::INFO, "received get {:#010x}", id);
+    fn on_get(&mut self, ctx: &mut Context, id: Uuid, action: SourceGet) -> Result<(), Error> {
+        event!(Level::INFO, "received get {:#010x}", action.id);
 
         // Track the get task
-        let task = GetTask { on_result };
-        self.get_tasks.insert(action_id, task);
+        let task = GetTask {
+            on_result: action.on_result,
+        };
+        self.get_tasks.insert(id, task);
 
         // Fetch the entry
-        let on_result = map_once(ctx, ctx.addr()?, Message::GetIndexResult)?;
-        let message = IndicesMessage {
-            id: action_id,
-            action: IndicesAction::Get { id, on_result },
+        let on_result = self.sender.clone().map(Message::GetIndexResult);
+        let action = GetIndex {
+            id: action.id,
+            on_result,
         };
-        ctx.send(self.indices, message);
+        let message = IndicesMessage {
+            id,
+            action: IndicesAction::Get(action),
+        };
+        self.indices.send(ctx, message);
 
         Ok(())
     }
@@ -172,53 +170,46 @@ impl FileSource {
                 on_result: task.on_result,
             },
         };
-        ctx.send(self.file, message);
+        self.file.send(ctx, message);
 
         Ok(())
     }
 
-    fn on_set(
-        &mut self,
-        ctx: &mut Context,
-        action_id: Uuid,
-        id: u32,
-        data: Vec<u8>,
-        on_result: Addr<()>,
-    ) -> Result<(), Error> {
+    fn on_set(&mut self, ctx: &mut Context, id: Uuid, action: SourceSet) -> Result<(), Error> {
         event!(
             Level::INFO,
-            id = ?action_id,
-            bytes = data.len(),
+            id = ?id,
+            bytes = action.data.len(),
             "received set {:#010x}",
-            id
+            action.id
         );
 
         // Append the data to the file
-        let size = data.len() as u32;
+        let size = action.data.len() as u32;
         let message = FileMessage {
-            id: action_id,
+            id,
             action: FileAction::Write {
                 location: WriteLocation::Append,
-                data,
-                on_result: map(ctx, ctx.addr()?, Message::SetWriteDataResult)?,
+                data: action.data,
+                on_result: self.sender.clone().map(Message::SetWriteDataResult),
             },
         };
-        ctx.send(self.file, message);
+        self.file.send(ctx, message);
 
         // Track the request
         let task = SetTask {
-            id,
+            id: action.id,
             size,
-            on_result,
+            on_result: action.on_result,
         };
-        self.set_tasks.insert(action_id, task);
+        self.set_tasks.insert(id, task);
 
         Ok(())
     }
 
     fn on_set_write_data_result(
         &mut self,
-        world: &mut World,
+        ctx: &mut Context,
         result: WriteResult,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
@@ -229,16 +220,17 @@ impl FileSource {
             .context("failed to get pending set task")?;
 
         // Write the entry
+        let action = SetIndex {
+            id: task.id,
+            offset: result.offset,
+            size: task.size,
+            on_result: task.on_result.clone(),
+        };
         let message = IndicesMessage {
             id: result.id,
-            action: IndicesAction::Set {
-                id: task.id,
-                offset: result.offset,
-                size: task.size,
-                on_result: task.on_result,
-            },
+            action: IndicesAction::Set(action),
         };
-        world.send(self.indices, message);
+        self.indices.send(ctx, message);
 
         Ok(())
     }

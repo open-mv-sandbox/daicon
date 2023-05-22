@@ -18,7 +18,7 @@ pub struct CreateCommand {
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
-    let mut ctx = ctx.create(Options::default())?;
+    let (mut ctx, _) = ctx.create::<()>(Options::default())?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), true)?;

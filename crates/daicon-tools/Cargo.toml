@@ -7,7 +7,6 @@ edition = "2021"
 anyhow.workspace = true
 clap = { workspace = true, features = ["derive"] }
 stewart.workspace = true
-stewart-utils.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid.workspace = true

@@ -2,7 +2,7 @@
 //!
 //! A "file" is an addressable blob of binary data, not necessarily a system file.
 
-use stewart::Addr;
+use stewart::Sender;
 use uuid::Uuid;
 
 /// Message to a file reader/writer actor.
@@ -16,12 +16,12 @@ pub enum FileAction {
     Read {
         offset: u64,
         size: u64,
-        on_result: Addr<ReadResult>,
+        on_result: Sender<ReadResult>,
     },
     Write {
         location: WriteLocation,
         data: Vec<u8>,
-        on_result: Addr<WriteResult>,
+        on_result: Sender<WriteResult>,
     },
 }
 

@@ -8,8 +8,7 @@ use std::{
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
 use daicon_types::{Entry, Header};
-use stewart::{Actor, Addr, Context, Options, State};
-use stewart_utils::{map, map_once, when};
+use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -20,20 +19,19 @@ use crate::{
 
 pub fn start(
     ctx: &mut Context,
-    file: Addr<FileMessage>,
+    file: Sender<FileMessage>,
     mode: OpenMode,
-) -> Result<Addr<IndicesMessage>, Error> {
+) -> Result<Sender<IndicesMessage>, Error> {
     event!(Level::DEBUG, "starting indices service");
 
-    let mut ctx = ctx.create(Options::default())?;
-    let addr = ctx.addr()?;
+    let (mut ctx, sender) = ctx.create(Options::default())?;
 
     let mut tables = Vec::new();
 
     // TODO: This is also the validation step, respond if we correctly validated
     match mode {
         OpenMode::ReadWrite => {
-            read_table(&mut ctx, file)?;
+            read_table(&mut ctx, file.clone(), sender.clone())?;
         }
         OpenMode::Create => {
             // Start writing immediately at the given offset
@@ -46,7 +44,7 @@ pub fn start(
                 entries: Vec::new(),
             };
 
-            write_table(&mut ctx, file, &table)?;
+            write_table(&mut ctx, file.clone(), &table)?;
 
             // Track the table we just wrote
             tables.push(table);
@@ -54,7 +52,7 @@ pub fn start(
     }
 
     // Start the actor
-    let actor = Indices {
+    let actor = IndicesService {
         file,
 
         tables: Vec::new(),
@@ -63,8 +61,7 @@ pub fn start(
     };
     ctx.start(actor)?;
 
-    let action_addr = map(&mut ctx, addr, Message::Action)?;
-    Ok(action_addr)
+    Ok(sender.map(ImplMessage::Message))
 }
 
 pub struct IndicesMessage {
@@ -73,35 +70,39 @@ pub struct IndicesMessage {
 }
 
 pub enum IndicesAction {
-    Get {
-        id: u32,
-        on_result: Addr<(Uuid, u64, u32)>,
-    },
-    Set {
-        id: u32,
-        offset: u64,
-        size: u32,
-        on_result: Addr<()>,
-    },
+    Get(GetIndex),
+    Set(SetIndex),
 }
 
-struct Indices {
-    file: Addr<FileMessage>,
+pub struct GetIndex {
+    pub id: u32,
+    pub on_result: Sender<(Uuid, u64, u32)>,
+}
+
+pub struct SetIndex {
+    pub id: u32,
+    pub offset: u64,
+    pub size: u32,
+    pub on_result: Sender<()>,
+}
+
+struct IndicesService {
+    file: Sender<FileMessage>,
 
     tables: Vec<Table>,
-    get_tasks: HashMap<Uuid, (u32, Addr<(Uuid, u64, u32)>)>,
-    set_tasks: HashMap<Uuid, (u32, u64, u32, Addr<()>)>,
+    get_tasks: HashMap<Uuid, GetIndex>,
+    set_tasks: HashMap<Uuid, SetIndex>,
 }
 
-impl Actor for Indices {
-    type Message = Message;
+impl Actor for IndicesService {
+    type Message = ImplMessage;
 
     #[instrument("indices", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
-                Message::Action(message) => self.on_action(message),
-                Message::ReadResult(message) => self.on_read_result(message)?,
+                ImplMessage::Message(message) => self.on_message(message),
+                ImplMessage::ReadResult(message) => self.on_read_result(message)?,
             }
         }
 
@@ -111,22 +112,16 @@ impl Actor for Indices {
     }
 }
 
-impl Indices {
-    fn on_action(&mut self, message: IndicesMessage) {
+impl IndicesService {
+    fn on_message(&mut self, message: IndicesMessage) {
         match message.action {
-            IndicesAction::Get { id, on_result } => {
-                event!(Level::DEBUG, "received get {:#010x}", id);
-                self.get_tasks.insert(message.id, (id, on_result));
+            IndicesAction::Get(action) => {
+                event!(Level::DEBUG, "received get {:#010x}", action.id);
+                self.get_tasks.insert(message.id, action);
             }
-            IndicesAction::Set {
-                id,
-                offset,
-                size,
-                on_result,
-            } => {
-                event!(Level::DEBUG, "received set {:#010x}", id);
-                self.set_tasks
-                    .insert(message.id, (id, offset, size, on_result));
+            IndicesAction::Set(action) => {
+                event!(Level::DEBUG, "received set {:#010x}", action.id);
+                self.set_tasks.insert(message.id, action);
             }
         }
     }
@@ -143,10 +138,10 @@ impl Indices {
     fn update_tasks(&mut self, ctx: &mut Context) {
         // Resolve gets we can resolve
         self.get_tasks
-            .retain(|id, task| match find(&self.tables, task.0) {
+            .retain(|id, task| match find(&self.tables, task.id) {
                 Some(value) => {
-                    event!(Level::DEBUG, "found entry {:#010x}", task.0);
-                    ctx.send(task.1, (*id, value.0, value.1));
+                    event!(Level::DEBUG, "found entry {:#010x}", task.id);
+                    task.on_result.send(ctx, (*id, value.0, value.1));
                     false
                 }
                 None => true,
@@ -161,14 +156,14 @@ impl Indices {
                 return true;
             };
 
-            event!(Level::DEBUG, "setting entry {:#010x}", task.0);
+            event!(Level::DEBUG, "setting entry {:#010x}", task.id);
 
             // TODO: Allocate a new table if we've read all and we can't find a slot
-            if task.1 < table.offset {
+            if task.offset < table.offset {
                 event!(Level::ERROR, "cannot insert entry, case not implemented");
                 return false;
             }
-            let relative = task.1 - table.offset;
+            let relative = task.offset - table.offset;
             if relative > u32::MAX as u64 || table.entries.len() >= table.capacity as usize {
                 event!(Level::ERROR, "cannot insert entry, case not implemented");
                 return false;
@@ -176,17 +171,17 @@ impl Indices {
 
             // Insert the new entry
             let mut entry = Entry::default();
-            entry.set_id(task.0);
+            entry.set_id(task.id);
             entry.set_offset(relative as u32);
-            entry.set_size(task.2);
+            entry.set_size(task.size);
             table.entries.push(entry);
 
             // Flush write the table
-            write_table(ctx, self.file, table).unwrap();
+            write_table(ctx, self.file.clone(), table).unwrap();
 
             // Report success
             // TODO: Wait for write to report back
-            ctx.send(task.3, ());
+            task.on_result.send(ctx, ());
 
             false
         });
@@ -212,8 +207,8 @@ impl Table {
     }
 }
 
-enum Message {
-    Action(IndicesMessage),
+enum ImplMessage {
+    Message(IndicesMessage),
     ReadResult(ReadResult),
 }
 
@@ -221,7 +216,11 @@ fn find(tables: &[Table], id: u32) -> Option<(u64, u32)> {
     tables.iter().find_map(|table| table.find(id))
 }
 
-fn read_table(ctx: &mut Context, file: Addr<FileMessage>) -> Result<(), Error> {
+fn read_table(
+    ctx: &mut Context,
+    file: Sender<FileMessage>,
+    sender: Sender<ImplMessage>,
+) -> Result<(), Error> {
     // Start reading the first header
     let size = (size_of::<Header>() + (size_of::<Entry>() * 256)) as u64;
     let message = FileMessage {
@@ -229,10 +228,10 @@ fn read_table(ctx: &mut Context, file: Addr<FileMessage>) -> Result<(), Error> {
         action: FileAction::Read {
             offset: 0,
             size,
-            on_result: map_once(ctx, ctx.addr()?, Message::ReadResult)?,
+            on_result: sender.map(ImplMessage::ReadResult),
         },
     };
-    ctx.send(file, message);
+    file.send(ctx, message);
 
     Ok(())
 }
@@ -260,7 +259,7 @@ fn parse_table(result: ReadResult) -> Result<Table, Error> {
     Ok(table)
 }
 
-fn write_table(ctx: &mut Context, file: Addr<FileMessage>, table: &Table) -> Result<(), Error> {
+fn write_table(ctx: &mut Context, file: Sender<FileMessage>, table: &Table) -> Result<(), Error> {
     let mut data = Vec::new();
 
     // Write the header
@@ -285,13 +284,13 @@ fn write_table(ctx: &mut Context, file: Addr<FileMessage>, table: &Table) -> Res
     let action = FileAction::Write {
         location: WriteLocation::Offset(table.location),
         data,
-        on_result: when(ctx, Options::default(), |_, _| Ok(false))?,
+        on_result: Sender::noop(),
     };
     let message = FileMessage {
         id: Uuid::new_v4(),
         action,
     };
-    ctx.send(file, message);
+    file.send(ctx, message);
 
     Ok(())
 }

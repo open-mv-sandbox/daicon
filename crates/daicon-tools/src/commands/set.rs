@@ -1,8 +1,7 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_source, OpenMode, SourceAction, SourceMessage};
+use daicon::{open_source, OpenMode, SourceAction, SourceMessage, SourceSet};
 use stewart::{Actor, Context, Options, State};
-use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -30,8 +29,7 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
 
     let id = parse_hex(&command.id)?;
 
-    let mut ctx = ctx.create(Options::default())?;
-    let addr = ctx.addr()?;
+    let (mut ctx, sender) = ctx.create(Options::default())?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
@@ -39,15 +37,16 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;
+    let action = SourceSet {
+        id,
+        data,
+        on_result: sender.map(Message::Write),
+    };
     let message = SourceMessage {
         id: Uuid::new_v4(),
-        action: SourceAction::Set {
-            id,
-            data,
-            on_result: map_once(&mut ctx, addr, Message::Write)?,
-        },
+        action: SourceAction::Set(action),
     };
-    ctx.send(source, message);
+    source.send(&mut ctx, message);
 
     let actor = SetCommandActor {};
     ctx.start(actor)?;
