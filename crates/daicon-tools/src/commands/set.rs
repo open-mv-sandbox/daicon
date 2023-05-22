@@ -1,7 +1,7 @@
 use anyhow::Error;
 use clap::Args;
 use daicon::{open_source, OpenMode, SourceAction, SourceMessage};
-use stewart::{Actor, ActorId, Addr, Options, State, World};
+use stewart::{Actor, Context, Options, State};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -25,17 +25,17 @@ pub struct SetCommand {
 }
 
 #[instrument("start_set_command", skip_all)]
-pub fn start(world: &mut World, command: SetCommand) -> Result<(), Error> {
+pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 
     let id = parse_hex(&command.id)?;
 
-    let actor_id = world.create(None, Options::default())?;
-    let addr = Addr::new(actor_id);
+    let mut ctx = ctx.create(Options::default())?;
+    let addr = ctx.addr()?;
 
     // Open the target file
-    let file = open_system_file(world, Some(actor_id), command.target.clone(), false)?;
-    let source = open_source(world, Some(actor_id), file, OpenMode::ReadWrite)?;
+    let file = open_system_file(&mut ctx, command.target.clone(), false)?;
+    let source = open_source(&mut ctx, file, OpenMode::ReadWrite)?;
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;
@@ -44,29 +44,27 @@ pub fn start(world: &mut World, command: SetCommand) -> Result<(), Error> {
         action: SourceAction::Set {
             id,
             data,
-            on_result: map_once(world, Some(actor_id), addr, Message::Write)?,
+            on_result: map_once(&mut ctx, addr, Message::Write)?,
         },
     };
-    world.send(source, message);
+    ctx.send(source, message);
 
-    let actor = SetCommandActor { id: actor_id };
-    world.start(actor_id, actor)?;
+    let actor = SetCommandActor {};
+    ctx.start(actor)?;
 
     Ok(())
 }
 
-struct SetCommandActor {
-    id: ActorId,
-}
+struct SetCommandActor {}
 
 impl Actor for SetCommandActor {
     type Message = Message;
 
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 Message::Write(()) => {
-                    world.stop(self.id)?;
+                    ctx.stop()?;
                 }
             }
         }

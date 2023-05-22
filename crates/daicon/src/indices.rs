@@ -8,7 +8,7 @@ use std::{
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
 use daicon_types::{Entry, Header};
-use stewart::{Actor, ActorId, Addr, Options, State, World};
+use stewart::{Actor, Addr, Context, Options, State};
 use stewart_utils::{map, map_once, when};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -19,22 +19,21 @@ use crate::{
 };
 
 pub fn start(
-    world: &mut World,
-    parent: Option<ActorId>,
+    ctx: &mut Context,
     file: Addr<FileMessage>,
     mode: OpenMode,
 ) -> Result<Addr<IndicesMessage>, Error> {
     event!(Level::DEBUG, "starting indices service");
 
-    let id = world.create(parent, Options::default())?;
-    let addr = Addr::new(id);
+    let mut ctx = ctx.create(Options::default())?;
+    let addr = ctx.addr()?;
 
     let mut tables = Vec::new();
 
     // TODO: This is also the validation step, respond if we correctly validated
     match mode {
         OpenMode::ReadWrite => {
-            read_table(world, file, id)?;
+            read_table(&mut ctx, file)?;
         }
         OpenMode::Create => {
             // Start writing immediately at the given offset
@@ -47,7 +46,7 @@ pub fn start(
                 entries: Vec::new(),
             };
 
-            write_table(world, file, id, &table)?;
+            write_table(&mut ctx, file, &table)?;
 
             // Track the table we just wrote
             tables.push(table);
@@ -56,16 +55,15 @@ pub fn start(
 
     // Start the actor
     let actor = Indices {
-        id,
         file,
 
         tables: Vec::new(),
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
-    world.start(id, actor)?;
+    ctx.start(actor)?;
 
-    let action_addr = map(world, Some(id), addr, Message::Action)?;
+    let action_addr = map(&mut ctx, addr, Message::Action)?;
     Ok(action_addr)
 }
 
@@ -88,7 +86,6 @@ pub enum IndicesAction {
 }
 
 struct Indices {
-    id: ActorId,
     file: Addr<FileMessage>,
 
     tables: Vec<Table>,
@@ -100,7 +97,7 @@ impl Actor for Indices {
     type Message = Message;
 
     #[instrument("indices", skip_all)]
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 Message::Action(message) => self.on_action(message),
@@ -108,7 +105,7 @@ impl Actor for Indices {
             }
         }
 
-        self.update_tasks(world);
+        self.update_tasks(ctx);
 
         Ok(())
     }
@@ -143,13 +140,13 @@ impl Indices {
         Ok(())
     }
 
-    fn update_tasks(&mut self, world: &mut World) {
+    fn update_tasks(&mut self, ctx: &mut Context) {
         // Resolve gets we can resolve
         self.get_tasks
             .retain(|id, task| match find(&self.tables, task.0) {
                 Some(value) => {
                     event!(Level::DEBUG, "found entry {:#010x}", task.0);
-                    world.send(task.1, (*id, value.0, value.1));
+                    ctx.send(task.1, (*id, value.0, value.1));
                     false
                 }
                 None => true,
@@ -185,11 +182,11 @@ impl Indices {
             table.entries.push(entry);
 
             // Flush write the table
-            write_table(world, self.file, self.id, table).unwrap();
+            write_table(ctx, self.file, table).unwrap();
 
             // Report success
             // TODO: Wait for write to report back
-            world.send(task.3, ());
+            ctx.send(task.3, ());
 
             false
         });
@@ -224,7 +221,7 @@ fn find(tables: &[Table], id: u32) -> Option<(u64, u32)> {
     tables.iter().find_map(|table| table.find(id))
 }
 
-fn read_table(world: &mut World, file: Addr<FileMessage>, id: ActorId) -> Result<(), Error> {
+fn read_table(ctx: &mut Context, file: Addr<FileMessage>) -> Result<(), Error> {
     // Start reading the first header
     let size = (size_of::<Header>() + (size_of::<Entry>() * 256)) as u64;
     let message = FileMessage {
@@ -232,10 +229,10 @@ fn read_table(world: &mut World, file: Addr<FileMessage>, id: ActorId) -> Result
         action: FileAction::Read {
             offset: 0,
             size,
-            on_result: map_once(world, Some(id), Addr::new(id), Message::ReadResult)?,
+            on_result: map_once(ctx, ctx.addr()?, Message::ReadResult)?,
         },
     };
-    world.send(file, message);
+    ctx.send(file, message);
 
     Ok(())
 }
@@ -263,12 +260,7 @@ fn parse_table(result: ReadResult) -> Result<Table, Error> {
     Ok(table)
 }
 
-fn write_table(
-    world: &mut World,
-    file: Addr<FileMessage>,
-    id: ActorId,
-    table: &Table,
-) -> Result<(), Error> {
+fn write_table(ctx: &mut Context, file: Addr<FileMessage>, table: &Table) -> Result<(), Error> {
     let mut data = Vec::new();
 
     // Write the header
@@ -293,13 +285,13 @@ fn write_table(
     let action = FileAction::Write {
         location: WriteLocation::Offset(table.location),
         data,
-        on_result: when(world, Some(id), Options::default(), |_, _| Ok(false))?,
+        on_result: when(ctx, Options::default(), |_, _| Ok(false))?,
     };
     let message = FileMessage {
         id: Uuid::new_v4(),
         action,
     };
-    world.send(file, message);
+    ctx.send(file, message);
 
     Ok(())
 }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use anyhow::{Context, Error};
-use stewart::{Actor, ActorId, Addr, Options, State, World};
+use anyhow::{Context as _, Error};
+use stewart::{Actor, Addr, Context, Options, State, World};
 use stewart_utils::{map, map_once};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -17,30 +17,28 @@ use crate::{
 /// A "source" returns a file from UUIDs. A "file source" uses a file as a source.
 #[instrument("source", skip_all)]
 pub fn open_source(
-    world: &mut World,
-    parent: Option<ActorId>,
+    ctx: &mut Context,
     file: Addr<FileMessage>,
     mode: OpenMode,
 ) -> Result<Addr<SourceMessage>, Error> {
     event!(Level::INFO, ?mode, "opening source");
 
-    let id = world.create(parent, Options::default())?;
-    let addr = Addr::new(id);
+    let mut ctx = ctx.create(Options::default())?;
+    let addr = ctx.addr()?;
 
-    let source = map(world, Some(id), addr, Message::Action)?;
+    let source = map(&mut ctx, addr, Message::Action)?;
 
-    let indices = indices::start(world, Some(id), file, mode)?;
+    let indices = indices::start(&mut ctx, file, mode)?;
 
     // Start the root manager actor
     let instance = FileSource {
-        id,
         file,
         indices,
 
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
-    world.start(id, instance)?;
+    ctx.start(instance)?;
 
     Ok(source)
 }
@@ -66,7 +64,6 @@ pub enum SourceAction {
 }
 
 struct FileSource {
-    id: ActorId,
     file: Addr<FileMessage>,
     indices: Addr<IndicesMessage>,
 
@@ -89,17 +86,17 @@ impl Actor for FileSource {
     type Message = Message;
 
     #[instrument("source", skip_all)]
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 Message::Action(message) => {
-                    self.on_source_message(world, message)?;
+                    self.on_source_message(ctx, message)?;
                 }
                 Message::GetIndexResult((action_id, offset, size)) => {
-                    self.on_get_index_result(world, action_id, offset, size)?;
+                    self.on_get_index_result(ctx, action_id, offset, size)?;
                 }
                 Message::SetWriteDataResult(result) => {
-                    self.on_set_write_data_result(world, result)?;
+                    self.on_set_write_data_result(ctx, result)?;
                 }
             }
         }
@@ -111,19 +108,19 @@ impl Actor for FileSource {
 impl FileSource {
     fn on_source_message(
         &mut self,
-        world: &mut World,
+        ctx: &mut Context,
         message: SourceMessage,
     ) -> Result<(), Error> {
         match message.action {
             SourceAction::Get { id, on_result } => {
-                self.on_get(world, message.id, id, on_result)?;
+                self.on_get(ctx, message.id, id, on_result)?;
             }
             SourceAction::Set {
                 id,
                 data,
                 on_result,
             } => {
-                self.on_set(world, message.id, id, data, on_result)?;
+                self.on_set(ctx, message.id, id, data, on_result)?;
             }
         }
 
@@ -132,7 +129,7 @@ impl FileSource {
 
     fn on_get(
         &mut self,
-        world: &mut World,
+        ctx: &mut Context,
         action_id: Uuid,
         id: u32,
         on_result: Addr<ReadResult>,
@@ -144,24 +141,19 @@ impl FileSource {
         self.get_tasks.insert(action_id, task);
 
         // Fetch the entry
-        let on_result = map_once(
-            world,
-            Some(self.id),
-            Addr::new(self.id),
-            Message::GetIndexResult,
-        )?;
+        let on_result = map_once(ctx, ctx.addr()?, Message::GetIndexResult)?;
         let message = IndicesMessage {
             id: action_id,
             action: IndicesAction::Get { id, on_result },
         };
-        world.send(self.indices, message);
+        ctx.send(self.indices, message);
 
         Ok(())
     }
 
     fn on_get_index_result(
         &mut self,
-        world: &mut World,
+        ctx: &mut Context,
         action_id: Uuid,
         offset: u64,
         size: u32,
@@ -180,14 +172,14 @@ impl FileSource {
                 on_result: task.on_result,
             },
         };
-        world.send(self.file, message);
+        ctx.send(self.file, message);
 
         Ok(())
     }
 
     fn on_set(
         &mut self,
-        world: &mut World,
+        ctx: &mut Context,
         action_id: Uuid,
         id: u32,
         data: Vec<u8>,
@@ -208,15 +200,10 @@ impl FileSource {
             action: FileAction::Write {
                 location: WriteLocation::Append,
                 data,
-                on_result: map(
-                    world,
-                    Some(self.id),
-                    Addr::new(self.id),
-                    Message::SetWriteDataResult,
-                )?,
+                on_result: map(ctx, ctx.addr()?, Message::SetWriteDataResult)?,
             },
         };
-        world.send(self.file, message);
+        ctx.send(self.file, message);
 
         // Track the request
         let task = SetTask {

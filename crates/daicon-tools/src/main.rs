@@ -35,12 +35,13 @@ fn main() {
 fn try_main(args: CliArgs) -> Result<(), Error> {
     // Set up the runtime
     let mut world = World::new();
+    let mut ctx = world.root();
 
     // Start the command actor
     match args.command {
-        Command::Create(command) => commands::create::start(&mut world, command)?,
-        Command::Set(command) => commands::set::start(&mut world, command)?,
-        Command::Get(command) => commands::get::start(&mut world, command)?,
+        Command::Create(command) => commands::create::start(&mut ctx, command)?,
+        Command::Set(command) => commands::set::start(&mut ctx, command)?,
+        Command::Get(command) => commands::get::start(&mut ctx, command)?,
     };
 
     // Run the command until it's done

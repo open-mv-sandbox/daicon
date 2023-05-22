@@ -3,19 +3,18 @@ use std::{
     io::{ErrorKind, Read, Seek, SeekFrom, Write},
 };
 
-use anyhow::{Context, Error};
+use anyhow::{Context as _, Error};
 use daicon::file::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
-use stewart::{Actor, ActorId, Addr, Options, State, World};
+use stewart::{Actor, Addr, Context, Options, State};
 use tracing::instrument;
 
 #[instrument(skip_all)]
 pub fn open_system_file(
-    world: &mut World,
-    parent: Option<ActorId>,
+    ctx: &mut Context,
     path: String,
     truncate: bool,
 ) -> Result<Addr<FileMessage>, Error> {
-    let id = world.create(parent, Options::default())?;
+    let mut ctx = ctx.create(Options::default())?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -26,10 +25,9 @@ pub fn open_system_file(
         .context("failed to open system file for writing")?;
 
     let actor = SystemFile { file };
-    world.start(id, actor)?;
+    ctx.start(actor)?;
 
-    let addr = Addr::new(id);
-    Ok(addr)
+    Ok(ctx.addr()?)
 }
 
 struct SystemFile {
@@ -40,7 +38,7 @@ impl Actor for SystemFile {
     type Message = FileMessage;
 
     #[instrument("system-file", skip_all)]
-    fn process(&mut self, world: &mut World, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message.action {
                 FileAction::Read {
@@ -62,7 +60,7 @@ impl Actor for SystemFile {
                         offset,
                         data,
                     };
-                    world.send(on_result, result);
+                    ctx.send(on_result, result);
                 }
                 FileAction::Write {
                     location,
@@ -85,7 +83,7 @@ impl Actor for SystemFile {
                         id: message.id,
                         offset,
                     };
-                    world.send(on_result, result);
+                    ctx.send(on_result, result);
                 }
             }
         }
