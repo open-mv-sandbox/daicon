@@ -7,17 +7,18 @@ If you want a high-level explanation and primer instead, read the explainer docu
 
 | Bytes | Description |
 | --- | --- |
-| 12 | Header |
+| 20 | Header |
 | N * 12 | Entries |
 
 ### Header
 
 | Bytes | Data Type | Description |
 | --- | --- |
-| 4 | Bytes | Siagnture, 0x306364FF |
+| 4 | Bytes | Signature, 0x306364FF |
 | 2 | Unsigned | Capacity |
 | 2 | Unsigned | Valid |
-| 4 | Unsigned | Next |
+| 8 | Unsigned | Offset |
+| 8 | Unsigned | Next |
 
 #### Signature
 
@@ -34,10 +35,13 @@ When writing new entries in a file, this number can be used to find free capacit
 
 The amount of entries that should be seen as valid to read by a reader.
 
+#### Offset
+
+Value all offsets in this table start at.
+
 #### Next
 
 The offset of the start of the next table, or zero if no next table exists.
-Value relative to the start of the table.
 
 ### Entry
 
@@ -55,7 +59,7 @@ Parsers should handle this as an opaque value.
 #### Offset
 
 Offset of the data.
-Value relative to the start of the table.
+Value relative to header offset.
 
 #### Size
 

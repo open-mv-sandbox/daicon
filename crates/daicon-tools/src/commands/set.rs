@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::source::{open_file_source, OpenMode, SourceAction, SourceMessage};
+use daicon::{open_source, OpenMode, SourceAction, SourceMessage};
 use stewart::{Actor, ActorId, Addr, Options, State, World};
 use stewart_utils::map_once;
 use tracing::{event, instrument, Level};
@@ -35,7 +35,7 @@ pub fn start(world: &mut World, command: SetCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(world, Some(actor_id), command.target.clone(), false)?;
-    let source = open_file_source(world, Some(actor_id), file, OpenMode::ReadWrite)?;
+    let source = open_source(world, Some(actor_id), file, OpenMode::ReadWrite)?;
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;

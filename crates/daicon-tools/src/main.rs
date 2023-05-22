@@ -13,9 +13,7 @@ use crate::commands::{create::CreateCommand, set::SetCommand};
 fn main() {
     let args = CliArgs::parse();
 
-    let filter = EnvFilter::builder()
-        .parse("trace,stewart=warn,ptero_file=warn")
-        .unwrap();
+    let filter = EnvFilter::builder().parse("trace,stewart=warn").unwrap();
     let subscriber = FmtSubscriber::builder()
         .with_max_level(Level::TRACE)
         .without_time()

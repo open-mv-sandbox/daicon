@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::source::{open_file_source, OpenMode};
+use daicon::{open_source, OpenMode};
 use stewart::{Actor, Options, State, World};
 use tracing::{event, instrument, Level};
 
@@ -22,7 +22,7 @@ pub fn start(world: &mut World, command: CreateCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(world, Some(id), command.target.clone(), true)?;
-    let _source = open_file_source(world, Some(id), file, OpenMode::Create)?;
+    let _source = open_source(world, Some(id), file, OpenMode::Create)?;
 
     // Start the command actor
     world.start(id, command)?;

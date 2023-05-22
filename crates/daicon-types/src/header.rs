@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::num::NonZeroU64;
 
 use bytemuck::{Pod, Zeroable};
 
@@ -14,7 +14,8 @@ pub struct Header {
     signature: u32,
     capacity: u16,
     valid: u16,
-    next: u32,
+    offset: u64,
+    next: u64,
 }
 
 impl Header {
@@ -45,12 +46,20 @@ impl Header {
         self.valid = value;
     }
 
-    /// Get the offset of the next table.
-    pub fn next(&self) -> Option<NonZeroU32> {
-        NonZeroU32::new(self.next)
+    pub fn offset(&self) -> u64 {
+        self.offset
     }
 
-    pub fn set_next(&mut self, value: Option<NonZeroU32>) {
+    pub fn set_offset(&mut self, value: u64) {
+        self.offset = value;
+    }
+
+    /// Get the offset of the next table.
+    pub fn next(&self) -> Option<NonZeroU64> {
+        NonZeroU64::new(self.next)
+    }
+
+    pub fn set_next(&mut self, value: Option<NonZeroU64>) {
         self.next = value.map(|v| v.get()).unwrap_or(0);
     }
 
