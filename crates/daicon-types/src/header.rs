@@ -24,32 +24,37 @@ impl Header {
         self.signature
     }
 
+    /// Set `signature`.
     pub fn set_signature(&mut self, value: u32) {
         self.signature = value;
     }
 
-    /// Get the amount of entries of allocated space available in this table.
+    /// Get the amount of indices of allocated space available in this table.
     pub fn capacity(&self) -> u16 {
         self.capacity
     }
 
+    /// Set `capacity`.
     pub fn set_capacity(&mut self, value: u16) {
         self.capacity = value;
     }
 
-    /// Get the amount of entries that contain valid data in this table.
+    /// Get the amount of indices that contain valid data in this table.
     pub fn valid(&self) -> u16 {
         self.valid
     }
 
+    /// Set `valid`.
     pub fn set_valid(&mut self, value: u16) {
         self.valid = value;
     }
 
+    /// Get the offset that all indices are relative to.
     pub fn offset(&self) -> u64 {
         self.offset
     }
 
+    /// Set `offset`.
     pub fn set_offset(&mut self, value: u64) {
         self.offset = value;
     }
@@ -59,6 +64,7 @@ impl Header {
         NonZeroU64::new(self.next)
     }
 
+    /// Set `next`.
     pub fn set_next(&mut self, value: Option<NonZeroU64>) {
         self.next = value.map(|v| v.get()).unwrap_or(0);
     }

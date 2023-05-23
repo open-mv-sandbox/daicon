@@ -2,12 +2,12 @@
 //!
 //! This library version is based off the daicon 0.2.0 specification.
 
-mod entry;
 mod header;
+mod index;
 
 pub use self::{
-    entry::{Entry, Id},
     header::Header,
+    index::{Id, Index},
 };
 
 /// Magic signature of a daicon 0.x.x header, literally equivalent to 0xFF followed by ASCII "dc0".

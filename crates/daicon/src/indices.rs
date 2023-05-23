@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
-use daicon_types::{Entry, Header, Id};
+use daicon_types::{Index, Header, Id};
 use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -167,7 +167,7 @@ impl IndexService {
             let relative = task.offset - table.offset;
 
             // Insert the new entry
-            let mut entry = Entry::default();
+            let mut entry = Index::default();
             entry.set_id(task.id);
             entry.set_offset(relative as u32);
             entry.set_size(task.size);
@@ -189,7 +189,7 @@ struct Table {
     location: u64,
     offset: u64,
     capacity: u16,
-    entries: Vec<Entry>,
+    entries: Vec<Index>,
 }
 
 impl Table {
@@ -233,7 +233,7 @@ fn read_table(
     sender: Sender<ImplMessage>,
 ) -> Result<(), Error> {
     // Start reading the first header
-    let size = (size_of::<Header>() + (size_of::<Entry>() * 256)) as u64;
+    let size = (size_of::<Header>() + (size_of::<Index>() * 256)) as u64;
     let action = FileRead {
         offset: 0,
         size,
@@ -259,7 +259,7 @@ fn parse_table(result: ReadResult) -> Result<Table, Error> {
     data.read_exact(bytes_of_mut(&mut header))?;
 
     // Read entries
-    let mut entries = vec![Entry::default(); header.valid() as usize];
+    let mut entries = vec![Index::default(); header.valid() as usize];
     data.read_exact(cast_slice_mut(&mut entries))?;
 
     let table = Table {
@@ -287,7 +287,7 @@ fn write_table(ctx: &mut Context, file: &Sender<FileMessage>, table: &Table) -> 
     }
 
     // Pad with empty entries
-    let empty = Entry::default();
+    let empty = Index::default();
     for _ in 0..(table.capacity as usize - table.entries.len()) {
         data.write_all(bytes_of(&empty))?;
     }

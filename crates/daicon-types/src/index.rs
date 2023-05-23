@@ -2,16 +2,16 @@ use std::fmt::{self, Debug, Formatter};
 
 use bytemuck::{Pod, Zeroable};
 
-/// Entry in a daicon table.
+/// Index in a daicon table.
 #[derive(Pod, Zeroable, PartialEq, Hash, Default, Clone, Copy)]
 #[repr(C)]
-pub struct Entry {
+pub struct Index {
     id: u32,
     offset: u32,
     size: u32,
 }
 
-impl Entry {
+impl Index {
     /// Get the ID of the entry.
     pub fn id(&self) -> Id {
         Id(self.id)
@@ -40,7 +40,7 @@ impl Entry {
     }
 }
 
-impl Debug for Entry {
+impl Debug for Index {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -50,6 +50,7 @@ impl Debug for Entry {
     }
 }
 
+/// Daicon entry identifier.
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
 #[repr(transparent)]
 pub struct Id(pub u32);
