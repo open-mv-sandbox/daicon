@@ -8,7 +8,7 @@ If you want a high-level explanation and primer instead, read the explainer docu
 | Bytes | Description |
 | --- | --- |
 | 20 | Header |
-| N * 12 | Entries |
+| N * 12 | Indices |
 
 ### Header
 
@@ -43,7 +43,7 @@ Value all offsets in this table start at.
 
 The offset of the start of the next table, or zero if no next table exists.
 
-### Entry
+### Index
 
 | Bytes | Data Type | Description |
 | --- | --- | --- |
@@ -67,6 +67,6 @@ Size of the data in bytes.
 
 ## Change Log
 
-### 0.2.0 (unreleased)
+### 0.2.0
 
 - Major specification rewrite, all backwards compatibility with 0.1 broken.
