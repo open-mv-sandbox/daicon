@@ -1,9 +1,9 @@
 mod commands;
-mod system;
 
 use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};
 use commands::get::GetCommand;
+use daicon_types::Id;
 use stewart::World;
 use tracing::{event, Level};
 use tracing_subscriber::{prelude::*, EnvFilter, FmtSubscriber};
@@ -66,12 +66,12 @@ enum Command {
     Get(GetCommand),
 }
 
-fn parse_hex(str: &str) -> Result<u32, Error> {
+fn parse_hex(str: &str) -> Result<Id, Error> {
     if str.len() != 10 || !str.starts_with("0x") {
         bail!("input must be a hexadecimal, starting with 0x, followed by 8 characters");
     }
 
     let result = u32::from_str_radix(&str[2..], 16)?;
 
-    Ok(result)
+    Ok(Id(result))
 }

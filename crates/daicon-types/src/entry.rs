@@ -13,12 +13,12 @@ pub struct Entry {
 
 impl Entry {
     /// Get the ID of the entry.
-    pub fn id(&self) -> u32 {
-        self.id
+    pub fn id(&self) -> Id {
+        Id(self.id)
     }
 
-    pub fn set_id(&mut self, value: u32) {
-        self.id = value;
+    pub fn set_id(&mut self, value: Id) {
+        self.id = value.0;
     }
 
     /// Get the offset of the entry.
@@ -47,5 +47,15 @@ impl Debug for Entry {
             "Entry({:#010x}) {{ offset: {:#010x}, size: {} }}",
             self.id, self.offset, self.size
         )
+    }
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Copy)]
+#[repr(transparent)]
+pub struct Id(pub u32);
+
+impl Debug for Id {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Id({:#010x})", self.0)
     }
 }

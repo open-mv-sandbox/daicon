@@ -11,3 +11,5 @@ tracing.workspace = true
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid.workspace = true
 daicon.workspace = true
+daicon-native.workspace = true
+daicon-types.workspace = true

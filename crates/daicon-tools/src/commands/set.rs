@@ -1,11 +1,12 @@
 use anyhow::Error;
 use clap::Args;
 use daicon::{open_source, OpenMode, SourceAction, SourceMessage, SourceSet};
+use daicon_native::open_system_file;
 use stewart::{Actor, Context, Options, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{parse_hex, system::open_system_file};
+use crate::parse_hex;
 
 /// Set or add an entry in a daicon file.
 #[derive(Args, Debug)]

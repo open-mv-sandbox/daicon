@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
-use daicon_types::{Entry, Header};
+use daicon_types::{Entry, Header, Id};
 use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -32,7 +32,7 @@ pub fn start(
     // TODO: This is also the validation step, respond if we correctly validated
     match mode {
         OpenMode::ReadWrite => {
-            read_table(&mut ctx, file.clone(), sender.clone())?;
+            read_table(&mut ctx, &file, sender.clone())?;
         }
         OpenMode::Create => {
             // Start writing immediately at the given offset
@@ -45,7 +45,7 @@ pub fn start(
                 entries: Vec::new(),
             };
 
-            write_table(&mut ctx, file.clone(), &table)?;
+            write_table(&mut ctx, &file, &table)?;
 
             // Track the table we just wrote
             tables.push(table);
@@ -76,12 +76,12 @@ pub enum IndexAction {
 }
 
 pub struct IndexGet {
-    pub id: u32,
+    pub id: Id,
     pub on_result: Sender<(Uuid, u64, u32)>,
 }
 
 pub struct IndexSet {
-    pub id: u32,
+    pub id: Id,
     pub offset: u64,
     pub size: u32,
     pub on_result: Sender<()>,
@@ -117,11 +117,11 @@ impl IndexService {
     fn on_message(&mut self, message: IndexServiceMessage) {
         match message.action {
             IndexAction::Get(action) => {
-                event!(Level::DEBUG, "received get {:#010x}", action.id);
+                event!(Level::DEBUG, id = ?action.id, "received get");
                 self.get_tasks.insert(message.id, action);
             }
             IndexAction::Set(action) => {
-                event!(Level::DEBUG, "received set {:#010x}", action.id);
+                event!(Level::DEBUG, id = ?action.id, "received set");
                 self.set_tasks.insert(message.id, action);
             }
         }
@@ -141,7 +141,7 @@ impl IndexService {
         self.get_tasks
             .retain(|id, task| match find(&self.tables, task.id) {
                 Some(value) => {
-                    event!(Level::DEBUG, "found entry {:#010x}", task.id);
+                    event!(Level::DEBUG, id = ?task.id, "found entry");
                     task.on_result.send(ctx, (*id, value.0, value.1));
                     false
                 }
@@ -157,18 +157,14 @@ impl IndexService {
                 return true;
             };
 
-            event!(Level::DEBUG, "setting entry {:#010x}", task.id);
+            event!(Level::DEBUG, id = ?task.id, "setting entry");
 
             // TODO: Allocate a new table if we've read all and we can't find a slot
-            if task.offset < table.offset {
+            if !table.can_insert(task.offset) {
                 event!(Level::ERROR, "cannot insert entry, case not implemented");
                 return false;
             }
             let relative = task.offset - table.offset;
-            if relative > u32::MAX as u64 || table.entries.len() >= table.capacity as usize {
-                event!(Level::ERROR, "cannot insert entry, case not implemented");
-                return false;
-            }
 
             // Insert the new entry
             let mut entry = Entry::default();
@@ -178,7 +174,7 @@ impl IndexService {
             table.entries.push(entry);
 
             // Flush write the table
-            write_table(ctx, self.file.clone(), table).unwrap();
+            write_table(ctx, &self.file, table).unwrap();
 
             // Report success
             // TODO: Wait for write to report back
@@ -197,7 +193,7 @@ struct Table {
 }
 
 impl Table {
-    fn find(&self, id: u32) -> Option<(u64, u32)> {
+    fn find(&self, id: Id) -> Option<(u64, u32)> {
         self.entries
             .iter()
             .find(|entry| entry.id() == id)
@@ -206,6 +202,20 @@ impl Table {
                 (offset, entry.size())
             })
     }
+
+    fn can_insert(&self, offset: u64) -> bool {
+        // Check if we have any room at all
+        if self.entries.len() >= self.capacity as usize {
+            return false;
+        }
+
+        // Check if the offset is in-range
+        if offset < self.offset || (offset - self.offset) > u32::MAX as u64 {
+            return false;
+        }
+
+        true
+    }
 }
 
 enum ImplMessage {
@@ -213,13 +223,13 @@ enum ImplMessage {
     ReadResult(ReadResult),
 }
 
-fn find(tables: &[Table], id: u32) -> Option<(u64, u32)> {
+fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
     tables.iter().find_map(|table| table.find(id))
 }
 
 fn read_table(
     ctx: &mut Context,
-    file: Sender<FileMessage>,
+    file: &Sender<FileMessage>,
     sender: Sender<ImplMessage>,
 ) -> Result<(), Error> {
     // Start reading the first header
@@ -261,7 +271,7 @@ fn parse_table(result: ReadResult) -> Result<Table, Error> {
     Ok(table)
 }
 
-fn write_table(ctx: &mut Context, file: Sender<FileMessage>, table: &Table) -> Result<(), Error> {
+fn write_table(ctx: &mut Context, file: &Sender<FileMessage>, table: &Table) -> Result<(), Error> {
     let mut data = Vec::new();
 
     // Write the header

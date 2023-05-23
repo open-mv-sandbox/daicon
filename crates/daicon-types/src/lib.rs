@@ -5,7 +5,10 @@
 mod entry;
 mod header;
 
-pub use self::{entry::Entry, header::Header};
+pub use self::{
+    entry::{Entry, Id},
+    header::Header,
+};
 
 /// Magic signature of a daicon 0.x.x header, literally equivalent to 0xFF followed by ASCII "dc0".
 pub const SIGNATURE: u32 = 0x306364FF;

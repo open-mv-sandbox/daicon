@@ -1,16 +1,14 @@
 [package]
-name = "daicon"
-version = "0.10.0"
+name = "daicon-native"
+version = "0.1.0"
 edition = "2021"
-description = "Reference rust reader/writer implementation of the daicon format"
+description = "Native system implementations of daicon protocols"
 readme = "../../README.md"
 repository = "https://github.com/open-mv-sandbox/daicon"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
 anyhow.workspace = true
-bytemuck.workspace = true
 stewart.workspace = true
 tracing.workspace = true
-uuid = { workspace = true, features = ["v4"] }
-daicon-types.workspace = true
+daicon.workspace = true

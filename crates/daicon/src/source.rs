@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::{Context as _, Error};
+use daicon_types::Id;
 use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
@@ -47,19 +48,19 @@ pub struct SourceMessage {
 }
 
 pub enum SourceAction {
-    /// Get the data associated with a UUID.
+    /// Get the data associated with an ID.
     Get(SourceGet),
-    /// Set the data associated with a UUID.
+    /// Set the data associated with an ID.
     Set(SourceSet),
 }
 
 pub struct SourceGet {
-    pub id: u32,
+    pub id: Id,
     pub on_result: Sender<ReadResult>,
 }
 
 pub struct SourceSet {
-    pub id: u32,
+    pub id: Id,
     pub data: Vec<u8>,
     pub on_result: Sender<()>,
 }
@@ -79,9 +80,15 @@ struct GetTask {
 }
 
 struct SetTask {
-    id: u32,
+    id: Id,
     size: u32,
     on_result: Sender<()>,
+}
+
+enum ImplMessage {
+    Message(SourceMessage),
+    GetIndexResult((Uuid, u64, u32)),
+    SetWriteDataResult(WriteResult),
 }
 
 impl Actor for Source {
@@ -122,7 +129,7 @@ impl Source {
     }
 
     fn on_get(&mut self, ctx: &mut Context, id: Uuid, action: SourceGet) -> Result<(), Error> {
-        event!(Level::INFO, "received get {:#010x}", action.id);
+        event!(Level::INFO, id = ?action.id, "received get");
 
         // Track the get task
         let task = GetTask {
@@ -131,43 +138,7 @@ impl Source {
         self.get_tasks.insert(id, task);
 
         // Fetch the entry
-        let on_result = self.sender.clone().map(ImplMessage::GetIndexResult);
-        let action = IndexGet {
-            id: action.id,
-            on_result,
-        };
-        let message = IndexServiceMessage {
-            id,
-            action: IndexAction::Get(action),
-        };
-        self.indices.send(ctx, message);
-
-        Ok(())
-    }
-
-    fn on_get_index_result(
-        &mut self,
-        ctx: &mut Context,
-        action_id: Uuid,
-        offset: u64,
-        size: u32,
-    ) -> Result<(), Error> {
-        // We've got the location of the data, so perform the read
-        let task = self
-            .get_tasks
-            .remove(&action_id)
-            .context("failed to find get task")?;
-
-        let action = FileRead {
-            offset,
-            size: size as u64,
-            on_result: task.on_result,
-        };
-        let message = FileMessage {
-            id: action_id,
-            action: FileAction::Read(action),
-        };
-        self.file.send(ctx, message);
+        self.send_read_index(ctx, id, action.id);
 
         Ok(())
     }
@@ -175,32 +146,42 @@ impl Source {
     fn on_set(&mut self, ctx: &mut Context, id: Uuid, action: SourceSet) -> Result<(), Error> {
         event!(
             Level::INFO,
-            id = ?id,
+            id = ?action.id,
             bytes = action.data.len(),
-            "received set {:#010x}",
-            action.id
+            "received set",
         );
-
-        // Append the data to the file
-        let size = action.data.len() as u32;
-        let file_action = FileWrite {
-            location: WriteLocation::Append,
-            data: action.data,
-            on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
-        };
-        let message = FileMessage {
-            id,
-            action: FileAction::Write(file_action),
-        };
-        self.file.send(ctx, message);
 
         // Track the request
         let task = SetTask {
             id: action.id,
-            size,
+            size: action.data.len() as u32,
             on_result: action.on_result,
         };
         self.set_tasks.insert(id, task);
+
+        // Append the data to the file
+        self.send_write_data(ctx, id, action.data);
+
+        Ok(())
+    }
+
+    fn on_get_index_result(
+        &mut self,
+        ctx: &mut Context,
+        id: Uuid,
+        offset: u64,
+        size: u32,
+    ) -> Result<(), Error> {
+        event!(Level::DEBUG, ?id, "received get index result");
+
+        // Remove the task, we're done with it in this actor
+        let task = self
+            .get_tasks
+            .remove(&id)
+            .context("failed to find get task")?;
+
+        // We've got the location of the data, so perform the read
+        self.send_read_data(ctx, id, offset, size, task.on_result);
 
         Ok(())
     }
@@ -212,30 +193,72 @@ impl Source {
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
 
+        // Remove the task, we're done with it in this actor
         let task = self
             .set_tasks
-            .get_mut(&result.id)
+            .remove(&result.id)
             .context("failed to get pending set task")?;
 
-        // Write the entry
-        let action = IndexSet {
-            id: task.id,
-            offset: result.offset,
-            size: task.size,
-            on_result: task.on_result.clone(),
-        };
-        let message = IndexServiceMessage {
-            id: result.id,
-            action: IndexAction::Set(action),
-        };
-        self.indices.send(ctx, message);
+        // Write the index
+        self.send_write_index(ctx, result.id, task, result.offset);
 
         Ok(())
     }
-}
 
-enum ImplMessage {
-    Message(SourceMessage),
-    GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(WriteResult),
+    fn send_read_index(&self, ctx: &mut Context, action_id: Uuid, id: Id) {
+        let on_result = self.sender.clone().map(ImplMessage::GetIndexResult);
+        let action = IndexGet { id, on_result };
+        let message = IndexServiceMessage {
+            id: action_id,
+            action: IndexAction::Get(action),
+        };
+        self.indices.send(ctx, message);
+    }
+
+    fn send_write_index(&self, ctx: &mut Context, id: Uuid, task: SetTask, offset: u64) {
+        let action = IndexSet {
+            id: task.id,
+            offset,
+            size: task.size,
+            on_result: task.on_result,
+        };
+        let message = IndexServiceMessage {
+            id,
+            action: IndexAction::Set(action),
+        };
+        self.indices.send(ctx, message);
+    }
+
+    fn send_read_data(
+        &self,
+        ctx: &mut Context,
+        id: Uuid,
+        offset: u64,
+        size: u32,
+        on_result: Sender<ReadResult>,
+    ) {
+        let action = FileRead {
+            offset,
+            size: size as u64,
+            on_result,
+        };
+        let message = FileMessage {
+            id,
+            action: FileAction::Read(action),
+        };
+        self.file.send(ctx, message);
+    }
+
+    fn send_write_data(&self, ctx: &mut Context, id: Uuid, data: Vec<u8>) {
+        let file_action = FileWrite {
+            location: WriteLocation::Append,
+            data,
+            on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
+        };
+        let message = FileMessage {
+            id,
+            action: FileAction::Write(file_action),
+        };
+        self.file.send(ctx, message);
+    }
 }
