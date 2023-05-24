@@ -10,40 +10,40 @@ If you want a high-level explanation and primer instead, read the explainer docu
 | 20 | Header |
 | N * 12 | Indices |
 
-### Header
+## Header
 
 | Bytes | Data Type | Description |
-| --- | --- |
+| --- | --- | --- |
 | 4 | Bytes | Signature, 0x306364FF |
 | 2 | Unsigned | Capacity |
 | 2 | Unsigned | Valid |
 | 8 | Unsigned | Offset |
 | 8 | Unsigned | Next |
 
-#### Signature
+### Signature
 
 Magic signature, to verify there is a daicon header at this location.
 This should always be validated.
 The signature is equivalent to 0xFF followed by "dc0" in ASCII.
 
-#### Capacity
+### Capacity
 
 The amount of entries available in this table.
 When writing new entries in a file, this number can be used to find free capacity in a table.
 
-#### Valid
+### Valid
 
 The amount of entries that should be seen as valid to read by a reader.
 
-#### Offset
+### Offset
 
 Value all offsets in this table start at.
 
-#### Next
+### Next
 
 The offset of the start of the next table, or zero if no next table exists.
 
-### Index
+## Index
 
 | Bytes | Data Type | Description |
 | --- | --- | --- |
@@ -51,17 +51,17 @@ The offset of the start of the next table, or zero if no next table exists.
 | 4 | Unsigned | Offset |
 | 4 | Unsigned | Size |
 
-#### Identifier
+### Identifier
 
 User-defined identifier.
 Parsers should handle this as an opaque value.
 
-#### Offset
+### Offset
 
 Offset of the data.
 Value relative to header offset.
 
-#### Size
+### Size
 
 Size of the data in bytes.
 
