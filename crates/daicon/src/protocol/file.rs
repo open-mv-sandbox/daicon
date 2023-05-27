@@ -1,17 +1,15 @@
-//! File operations interface.
-//!
-//! A "file" is an addressable blob of binary data, not necessarily a system file.
-
 use stewart::Sender;
 use uuid::Uuid;
 
 /// Message to a file reader/writer actor.
+///
+/// A "file" is an addressable blob of binary data, not necessarily a system file.
 pub struct FileMessage {
     pub id: Uuid,
     pub action: FileAction,
 }
 
-/// Operation to perform on a file.
+/// Action to perform on a file.
 pub enum FileAction {
     Read(FileRead),
     Write(FileWrite),
@@ -29,13 +27,13 @@ pub struct FileWrite {
     pub on_result: Sender<WriteResult>,
 }
 
-/// Location for `Operation::Write`.
+/// Location for `FileWrite`.
 pub enum WriteLocation {
     Offset(u64),
     Append,
 }
 
-/// Result of `Operation::Read`.
+/// Result of `FileRead`.
 pub struct ReadResult {
     /// Identifier of originating message.
     pub id: Uuid,
@@ -45,7 +43,7 @@ pub struct ReadResult {
     pub data: Vec<u8>,
 }
 
-/// Result of `Operation::Write`.
+/// Result of `FileWrite`.
 pub struct WriteResult {
     /// Identifier of originating message.
     pub id: Uuid,

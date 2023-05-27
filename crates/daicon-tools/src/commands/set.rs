@@ -1,6 +1,10 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_source, OpenMode, SourceAction, SourceMessage, SourceSet};
+use daicon::{
+    open_file_source,
+    protocol::{SourceAction, SourceMessage, SourceSet},
+    OpenMode,
+};
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, Options, State};
 use tracing::{event, instrument, Level};
@@ -34,7 +38,7 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
-    let source = open_source(&mut ctx, file, OpenMode::ReadWrite)?;
+    let source = open_file_source(&mut ctx, file, OpenMode::ReadWrite)?;
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;

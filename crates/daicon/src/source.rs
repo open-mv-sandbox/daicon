@@ -7,16 +7,17 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    file::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation, WriteResult},
     indices::{self, IndexAction, IndexGet, IndexServiceMessage, IndexSet},
+    protocol::{
+        FileAction, FileMessage, FileRead, FileWrite, ReadResult, SourceAction, SourceGet,
+        SourceMessage, SourceSet, WriteLocation, WriteResult,
+    },
     OpenMode,
 };
 
 /// Open a file as a daicon source.
-///
-/// A "source" returns a file from UUIDs. A "file source" uses a file as a source.
 #[instrument("Source", skip_all)]
-pub fn open_source(
+pub fn open_file_source(
     ctx: &mut Context,
     file: Sender<FileMessage>,
     mode: OpenMode,
@@ -40,29 +41,6 @@ pub fn open_source(
 
     let sender = sender.map(ImplMessage::Message);
     Ok(sender)
-}
-
-pub struct SourceMessage {
-    pub id: Uuid,
-    pub action: SourceAction,
-}
-
-pub enum SourceAction {
-    /// Get the data associated with an ID.
-    Get(SourceGet),
-    /// Set the data associated with an ID.
-    Set(SourceSet),
-}
-
-pub struct SourceGet {
-    pub id: Id,
-    pub on_result: Sender<ReadResult>,
-}
-
-pub struct SourceSet {
-    pub id: Id,
-    pub data: Vec<u8>,
-    pub on_result: Sender<()>,
 }
 
 struct Source {

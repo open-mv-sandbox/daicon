@@ -7,13 +7,13 @@ use std::{
 
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
-use daicon_types::{Index, Header, Id};
+use daicon_types::{Header, Id, Index};
 use stewart::{Actor, Context, Options, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    file::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation},
+    protocol::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation},
     OpenMode,
 };
 

@@ -7,7 +7,7 @@ If you want a high-level explanation and primer instead, read the explainer docu
 
 | Bytes | Description |
 | --- | --- |
-| 20 | Header |
+| 24 | Header |
 | N * 12 | Indices |
 
 ## Header
