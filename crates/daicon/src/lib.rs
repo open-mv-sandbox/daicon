@@ -17,3 +17,23 @@ pub enum OpenMode {
     ReadWrite,
     Create,
 }
+
+pub struct OpenOptions {
+    allocate_capacity: u16,
+}
+
+impl OpenOptions {
+    /// Sets the default capacity of new created tables.
+    pub fn allocate_capacity(mut self, value: u16) -> Self {
+        self.allocate_capacity = value;
+        self
+    }
+}
+
+impl Default for OpenOptions {
+    fn default() -> Self {
+        Self {
+            allocate_capacity: 256,
+        }
+    }
+}

@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     protocol::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation},
-    OpenMode,
+    OpenMode, OpenOptions,
 };
 
 #[instrument("IndexService", skip_all)]
@@ -22,6 +22,7 @@ pub fn start(
     ctx: &mut Context,
     file: Sender<FileMessage>,
     mode: OpenMode,
+    options: OpenOptions,
 ) -> Result<Sender<IndexServiceMessage>, Error> {
     event!(Level::DEBUG, "starting");
 
@@ -36,12 +37,10 @@ pub fn start(
         }
         OpenMode::Create => {
             // Start writing immediately at the given offset
-            let mut header = Header::default();
-            header.set_capacity(256);
             let table = Table {
                 location: 0,
                 offset: 0,
-                capacity: 256,
+                capacity: options.allocate_capacity,
                 entries: Vec::new(),
             };
 

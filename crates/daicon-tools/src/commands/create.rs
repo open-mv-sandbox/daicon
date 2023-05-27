@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_file_source, OpenMode};
+use daicon::{open_file_source, OpenMode, OpenOptions};
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, Options, State};
 use tracing::{event, instrument, Level};
@@ -21,7 +21,7 @@ pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), true)?;
-    let _source = open_file_source(&mut ctx, file, OpenMode::Create)?;
+    let _source = open_file_source(&mut ctx, file, OpenMode::Create, OpenOptions::default())?;
 
     // Start the command actor
     let actor = CreateCommandService {};

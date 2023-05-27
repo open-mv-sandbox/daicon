@@ -3,7 +3,7 @@ use clap::Args;
 use daicon::{
     open_file_source,
     protocol::{ReadResult, SourceAction, SourceGet, SourceMessage},
-    OpenMode,
+    OpenMode, OpenOptions,
 };
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, Options, State};
@@ -38,7 +38,7 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
-    let source = open_file_source(&mut ctx, file, OpenMode::ReadWrite)?;
+    let source = open_file_source(&mut ctx, file, OpenMode::ReadWrite, OpenOptions::default())?;
 
     // Add the data to the source
     let action = SourceGet {

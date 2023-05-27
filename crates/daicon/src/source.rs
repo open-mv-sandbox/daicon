@@ -12,7 +12,7 @@ use crate::{
         FileAction, FileMessage, FileRead, FileWrite, ReadResult, SourceAction, SourceGet,
         SourceMessage, SourceSet, WriteLocation, WriteResult,
     },
-    OpenMode,
+    OpenMode, OpenOptions,
 };
 
 /// Open a file as a daicon source.
@@ -21,12 +21,13 @@ pub fn open_file_source(
     ctx: &mut Context,
     file: Sender<FileMessage>,
     mode: OpenMode,
+    options: OpenOptions,
 ) -> Result<Sender<SourceMessage>, Error> {
     event!(Level::INFO, ?mode, "opening");
 
     let (mut ctx, sender) = ctx.create(Options::default())?;
 
-    let indices = indices::start(&mut ctx, file.clone(), mode)?;
+    let indices = indices::start(&mut ctx, file.clone(), mode, options)?;
 
     // Start the root manager actor
     let actor = Source {
