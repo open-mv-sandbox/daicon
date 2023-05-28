@@ -52,6 +52,7 @@ impl Debug for Index {
 
 /// Daicon entry identifier.
 #[derive(Hash, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(transparent)]
 pub struct Id(pub u32);
 
