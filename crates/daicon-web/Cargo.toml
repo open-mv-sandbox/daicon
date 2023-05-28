@@ -12,7 +12,7 @@ anyhow.workspace = true
 js-sys.workspace = true
 stewart.workspace = true
 tracing.workspace = true
-uuid = { workspace = true, features = ["v4"] }
+uuid.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
 daicon.workspace = true
@@ -26,3 +26,11 @@ features = [
     "Response",
     "Window",
 ]
+
+# This transient dependency needs to be told we're using wasm-bindgen.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { workspace = true, features = ["js"] }
+
+[dev-dependencies]
+tracing-wasm = "0.2.1"
+daicon-types.workspace = true
