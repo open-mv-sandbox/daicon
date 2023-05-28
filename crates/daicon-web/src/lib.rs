@@ -123,7 +123,7 @@ async fn do_fetch(
 
     // Perform fetch
     let headers = Headers::new().unwrap();
-    let range_header = format!("bytes={}-{}", range.start, range.end);
+    let range_header = format!("bytes={}-{}", range.start, range.end - 1);
     event!(Level::TRACE, range = range_header);
     headers.append("Range", &range_header).unwrap();
 

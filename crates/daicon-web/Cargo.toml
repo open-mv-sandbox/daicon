@@ -1,6 +1,6 @@
 [package]
 name = "daicon-web"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Web fetch implementations of daicon protocols"
 readme = "../../README.md"
