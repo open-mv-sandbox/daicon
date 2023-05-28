@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
 use anyhow::{Context as _, Error};
 use daicon::protocol::{FileAction, FileMessage, FileRead, ReadResult};
@@ -8,7 +8,7 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Request, RequestInit, RequestMode, Response};
+use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
 #[instrument("SystemFile", skip_all)]
 pub fn open_fetch_file(
@@ -73,36 +73,31 @@ impl FetchFile {
     fn on_read(&mut self, id: Uuid, action: FileRead) {
         event!(Level::INFO, "received read");
 
-        // TODO: VERY IMPORTANT: Batch all fetches, and only fetch correct regions
+        let range = action.offset..(action.offset + action.size);
         self.pending.insert(id, action);
+
+        // TODO: Batch fetches, we can do multiple range requests at once
         spawn_local(do_fetch(
             self.hnd.clone(),
             self.sender.clone(),
             id,
             self.url.clone(),
+            range,
         ));
     }
 
     fn on_fetch_result(&mut self, ctx: &mut Context, id: Uuid, data: Vec<u8>) -> Result<(), Error> {
         event!(Level::INFO, "received fetch result");
 
+        // TODO: Validate the actual result, we may not have gotten what we asked for, for example
+        //  a 200 response means we got the entire file instead of just the ranges.
+
         let pending = self.pending.remove(&id).context("failed to find pending")?;
-
-        let offset = pending.offset as usize;
-        let mut reply_data = vec![0u8; pending.size as usize];
-
-        let available = data.len() - offset;
-        let slice_len = usize::min(reply_data.len(), available);
-
-        let src = &data[offset..offset + slice_len];
-        let dst = &mut reply_data[0..slice_len];
-
-        dst.copy_from_slice(src);
 
         let message = ReadResult {
             id,
             offset: pending.offset,
-            data: reply_data,
+            data,
         };
         pending.on_result.send(ctx, message);
 
@@ -115,22 +110,38 @@ enum MessageImpl {
     FetchResult { id: Uuid, data: Vec<u8> },
 }
 
-async fn do_fetch(hnd: WorldHandle, sender: Sender<MessageImpl>, id: Uuid, url: String) {
+async fn do_fetch(
+    hnd: WorldHandle,
+    sender: Sender<MessageImpl>,
+    id: Uuid,
+    url: String,
+    range: Range<u64>,
+) {
     event!(Level::INFO, "fetching data");
+
+    let window = web_sys::window().unwrap();
+
+    // Perform fetch
+    let headers = Headers::new().unwrap();
+    let range_header = format!("bytes={}-{}", range.start, range.end);
+    event!(Level::TRACE, range = range_header);
+    headers.append("Range", &range_header).unwrap();
 
     let mut opts = RequestInit::new();
     opts.method("GET");
     opts.mode(RequestMode::Cors);
+    opts.headers(&headers);
 
     let request = Request::new_with_str_and_init(&url, &opts).unwrap();
+    let response = window.fetch_with_request(&request);
 
-    let window = web_sys::window().unwrap();
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .unwrap();
+    // Await the response
+    let response = JsFuture::from(response).await.unwrap();
+    let response: Response = response.dyn_into().unwrap();
 
-    let resp: Response = resp_value.dyn_into().unwrap();
-    let data = JsFuture::from(resp.array_buffer().unwrap()).await.unwrap();
+    // Await all the response data
+    let data = response.array_buffer().unwrap();
+    let data = JsFuture::from(data).await.unwrap();
     let data: ArrayBuffer = data.dyn_into().unwrap();
     let data = Uint8Array::new(&data).to_vec();
 

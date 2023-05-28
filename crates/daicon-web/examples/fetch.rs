@@ -35,7 +35,17 @@ fn main() {
     event!(Level::INFO, "starting example service...");
     ctx.start(ExampleService).unwrap();
 
-    event!(Level::INFO, "dispatching request...");
+    event!(Level::INFO, "dispatching requests...");
+    let action = SourceGet {
+        id: Id(0xbacc2ba1),
+        on_result: sender.clone(),
+    };
+    let message = SourceMessage {
+        id: Uuid::new_v4(),
+        action: SourceAction::Get(action),
+    };
+    source.send(&mut ctx, message);
+
     let action = SourceGet {
         id: Id(0x1f063ad4),
         on_result: sender,
