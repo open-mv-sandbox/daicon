@@ -4,7 +4,7 @@ use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};
 use commands::get::GetCommand;
 use daicon_types::Id;
-use stewart::World;
+use stewart::{Context, Schedule, World};
 use tracing::{event, Level};
 use tracing_subscriber::{prelude::*, EnvFilter, FmtSubscriber};
 
@@ -34,8 +34,9 @@ fn main() {
 
 fn try_main(args: CliArgs) -> Result<(), Error> {
     // Set up the runtime
-    let mut world = World::new();
-    let mut ctx = world.root();
+    let mut world = World::default();
+    let mut schedule = Schedule::default();
+    let mut ctx = Context::root(&mut world, &mut schedule);
 
     // Start the command actor
     match args.command {
@@ -45,7 +46,7 @@ fn try_main(args: CliArgs) -> Result<(), Error> {
     };
 
     // Run the command until it's done
-    world.run_until_idle()?;
+    schedule.run_until_idle(&mut world)?;
 
     // TODO: Receive command errors
     Ok(())

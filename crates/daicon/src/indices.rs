@@ -8,7 +8,7 @@ use std::{
 use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
 use daicon_types::{Header, Id, Index};
-use stewart::{Actor, Context, Options, Sender, State};
+use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ pub fn start(
 ) -> Result<Sender<IndexServiceMessage>, Error> {
     event!(Level::DEBUG, "starting");
 
-    let (mut ctx, sender) = ctx.create(Options::default())?;
+    let (mut ctx, sender) = ctx.create()?;
 
     let mut tables = Vec::new();
 

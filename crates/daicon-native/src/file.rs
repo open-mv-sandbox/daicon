@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::{Context as _, Error};
 use daicon::protocol::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
-use stewart::{Actor, Context, Options, Sender, State};
+use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 
 #[instrument("SystemFile", skip_all)]
@@ -16,7 +16,7 @@ pub fn open_system_file(
 ) -> Result<Sender<FileMessage>, Error> {
     event!(Level::INFO, "opening");
 
-    let (mut ctx, sender) = ctx.create(Options::default())?;
+    let (mut ctx, sender) = ctx.create()?;
 
     let file = OpenOptions::new()
         .read(true)

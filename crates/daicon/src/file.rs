@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context as _, Error};
 use daicon_types::Id;
-use stewart::{Actor, Context, Options, Sender, State};
+use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -25,7 +25,7 @@ pub fn open_file_source(
 ) -> Result<Sender<SourceMessage>, Error> {
     event!(Level::INFO, ?mode, "opening");
 
-    let (mut ctx, sender) = ctx.create(Options::default())?;
+    let (mut ctx, sender) = ctx.create()?;
 
     let indices = indices::start(&mut ctx, file.clone(), mode, options)?;
 

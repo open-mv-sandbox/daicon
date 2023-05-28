@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use anyhow::{Context as _, Error};
 use daicon::protocol::{FileAction, FileMessage, FileRead, ReadResult};
 use js_sys::{ArrayBuffer, Uint8Array};
-use stewart::{Actor, Context, Options, Sender, State, World};
+use stewart::{Actor, Context, Schedule, Sender, State, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
@@ -16,7 +16,7 @@ pub fn open_fetch_file(
     url: String,
     hnd: WorldHandle,
 ) -> Result<Sender<FileMessage>, Error> {
-    let (mut ctx, sender) = ctx.create(Options::default())?;
+    let (mut ctx, sender) = ctx.create()?;
 
     let actor = FetchFile {
         hnd,
@@ -147,9 +147,11 @@ async fn do_fetch(
 
     // Send the data back
     let mut world = hnd.borrow_mut();
-    let mut ctx = world.root();
+    let mut schedule = Schedule::default();
+    let mut ctx = Context::root(&mut world, &mut schedule);
+
     sender.send(&mut ctx, MessageImpl::FetchResult { id, data });
-    world.run_until_idle().unwrap();
+    schedule.run_until_idle(&mut world).unwrap();
 }
 
 /// TODO: Replace this with a more thought out executor abstraction.

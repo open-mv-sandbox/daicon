@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, OpenMode, OpenOptions};
 use daicon_native::open_system_file;
-use stewart::{Actor, Context, Options, State};
+use stewart::{Actor, Context, State};
 use tracing::{event, instrument, Level};
 
 /// Create a new daicon file.
@@ -17,7 +17,7 @@ pub struct CreateCommand {
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
-    let (mut ctx, _) = ctx.create::<()>(Options::default())?;
+    let (mut ctx, _) = ctx.create::<()>()?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), true)?;

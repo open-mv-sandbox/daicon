@@ -6,7 +6,7 @@ use daicon::{
     OpenMode, OpenOptions,
 };
 use daicon_native::open_system_file;
-use stewart::{Actor, Context, Options, State};
+use stewart::{Actor, Context, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -34,7 +34,7 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
 
     let id = parse_hex(&command.id)?;
 
-    let (mut ctx, sender) = ctx.create(Options::default())?;
+    let (mut ctx, sender) = ctx.create()?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
