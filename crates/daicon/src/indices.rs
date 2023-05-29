@@ -13,7 +13,7 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    protocol::{FileAction, FileMessage, FileRead, FileWrite, ReadResult, WriteLocation},
+    protocol::{FileAction, FileMessage, FileRead, FileReadResponse, FileWrite, WriteLocation},
     OpenMode, OpenOptions,
 };
 
@@ -126,7 +126,7 @@ impl IndexService {
         }
     }
 
-    fn on_read_result(&mut self, message: ReadResult) -> Result<(), Error> {
+    fn on_read_result(&mut self, message: FileReadResponse) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
 
         let table = parse_table(message)?;
@@ -219,7 +219,7 @@ impl Table {
 
 enum ImplMessage {
     Message(IndexServiceMessage),
-    ReadResult(ReadResult),
+    ReadResult(FileReadResponse),
 }
 
 fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
@@ -247,11 +247,12 @@ fn read_table(
     Ok(())
 }
 
-fn parse_table(result: ReadResult) -> Result<Table, Error> {
+fn parse_table(response: FileReadResponse) -> Result<Table, Error> {
     // TODO: Retry if the table's valid data is larger than what we've read.
     //  This happens if the read length heuristic is too small, we need to retry then.
 
-    let mut data = Cursor::new(result.data);
+    let data = response.result?;
+    let mut data = Cursor::new(data);
 
     // Read the header
     let mut header = Header::default();
@@ -262,7 +263,7 @@ fn parse_table(result: ReadResult) -> Result<Table, Error> {
     data.read_exact(cast_slice_mut(&mut entries))?;
 
     let table = Table {
-        location: result.offset,
+        location: 0,
         offset: header.offset(),
         capacity: header.capacity(),
         entries,

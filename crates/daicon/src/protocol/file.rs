@@ -1,3 +1,4 @@
+use anyhow::Error;
 use stewart::Sender;
 use uuid::Uuid;
 
@@ -18,13 +19,21 @@ pub enum FileAction {
 pub struct FileRead {
     pub offset: u64,
     pub size: u64,
-    pub on_result: Sender<ReadResult>,
+    pub on_result: Sender<FileReadResponse>,
+}
+
+/// Result of `FileRead`.
+pub struct FileReadResponse {
+    /// Identifier of originating message.
+    pub id: Uuid,
+    /// Result of the read action, containing the data read.
+    pub result: Result<Vec<u8>, Error>,
 }
 
 pub struct FileWrite {
     pub location: WriteLocation,
     pub data: Vec<u8>,
-    pub on_result: Sender<WriteResult>,
+    pub on_result: Sender<FileWriteResponse>,
 }
 
 /// Location for `FileWrite`.
@@ -33,20 +42,10 @@ pub enum WriteLocation {
     Append,
 }
 
-/// Result of `FileRead`.
-pub struct ReadResult {
-    /// Identifier of originating message.
-    pub id: Uuid,
-    /// Resolved stream offset read from.
-    pub offset: u64,
-    /// Read data.
-    pub data: Vec<u8>,
-}
-
 /// Result of `FileWrite`.
-pub struct WriteResult {
+pub struct FileWriteResponse {
     /// Identifier of originating message.
     pub id: Uuid,
-    /// Resolved stream offset written to.
-    pub offset: u64,
+    /// Result of the write action, containing the offset written to.
+    pub result: Result<u64, Error>,
 }

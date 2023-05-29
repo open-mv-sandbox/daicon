@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
 use anyhow::{Context as _, Error};
-use daicon::protocol::{FileAction, FileMessage, FileRead, ReadResult};
+use daicon::protocol::{FileAction, FileMessage, FileRead, FileReadResponse};
 use js_sys::{ArrayBuffer, Uint8Array};
 use stewart::{Actor, Context, Schedule, Sender, State, World};
 use tracing::{event, instrument, Level};
@@ -94,10 +94,9 @@ impl FetchFile {
 
         let pending = self.pending.remove(&id).context("failed to find pending")?;
 
-        let message = ReadResult {
+        let message = FileReadResponse {
             id,
-            offset: pending.offset,
-            data,
+            result: Ok(data),
         };
         pending.on_result.send(ctx, message);
 

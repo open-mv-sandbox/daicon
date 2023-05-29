@@ -4,7 +4,9 @@ use std::{
 };
 
 use anyhow::{Context as _, Error};
-use daicon::protocol::{FileAction, FileMessage, ReadResult, WriteLocation, WriteResult};
+use daicon::protocol::{
+    FileAction, FileMessage, FileReadResponse, FileWriteResponse, WriteLocation,
+};
 use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 
@@ -53,10 +55,9 @@ impl Actor for SystemFile {
                     read_exact_eof(&mut self.file, &mut data)?;
 
                     // Reply result
-                    let result = ReadResult {
+                    let result = FileReadResponse {
                         id: message.id,
-                        offset: action.offset,
-                        data,
+                        result: Ok(data),
                     };
                     action.on_result.send(ctx, result);
                 }
@@ -73,9 +74,9 @@ impl Actor for SystemFile {
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = WriteResult {
+                    let result = FileWriteResponse {
                         id: message.id,
-                        offset,
+                        result: Ok(offset),
                     };
                     action.on_result.send(ctx, result);
                 }

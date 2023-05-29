@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use anyhow::Error;
 use daicon::{
     open_file_source,
-    protocol::{ReadResult, SourceAction, SourceGet, SourceMessage},
+    protocol::{FileReadResponse, SourceAction, SourceGet, SourceMessage},
     OpenMode, OpenOptions,
 };
 use daicon_types::Id;
@@ -63,13 +63,13 @@ fn main() {
 struct ExampleService;
 
 impl Actor for ExampleService {
-    type Message = ReadResult;
+    type Message = FileReadResponse;
 
     fn process(&mut self, _ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             event!(Level::INFO, "received result");
 
-            let text = std::str::from_utf8(&message.data)?;
+            let text = std::str::from_utf8(&message.result)?;
             event!(Level::INFO, "text data:\n{}", text)
         }
 

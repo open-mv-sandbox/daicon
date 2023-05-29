@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Args;
 use daicon::{
     open_file_source,
-    protocol::{SourceAction, SourceMessage, SourceSet},
+    protocol::{SourceAction, SourceMessage, SourceSet, SourceSetResponse},
     OpenMode, OpenOptions,
 };
 use daicon_native::open_system_file;
@@ -45,7 +45,7 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     let action = SourceSet {
         id,
         data,
-        on_result: sender.map(Message::Write),
+        on_result: sender.map(Message::Result),
     };
     let message = SourceMessage {
         id: Uuid::new_v4(),
@@ -68,7 +68,7 @@ impl Actor for SetCommandService {
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
-                Message::Write(()) => {
+                Message::Result(_) => {
                     ctx.stop()?;
                 }
             }
@@ -79,5 +79,5 @@ impl Actor for SetCommandService {
 }
 
 enum Message {
-    Write(()),
+    Result(SourceSetResponse),
 }

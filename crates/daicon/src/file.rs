@@ -9,8 +9,9 @@ use uuid::Uuid;
 use crate::{
     indices::{self, IndexAction, IndexGet, IndexServiceMessage, IndexSet},
     protocol::{
-        FileAction, FileMessage, FileRead, FileWrite, ReadResult, SourceAction, SourceGet,
-        SourceMessage, SourceSet, WriteLocation, WriteResult,
+        FileAction, FileMessage, FileRead, FileReadResponse, FileWrite, FileWriteResponse,
+        SourceAction, SourceGet, SourceGetResponse, SourceMessage, SourceSet, SourceSetResponse,
+        WriteLocation,
     },
     OpenMode, OpenOptions,
 };
@@ -55,19 +56,19 @@ struct Source {
 }
 
 struct GetTask {
-    on_result: Sender<ReadResult>,
+    on_result: Sender<SourceGetResponse>,
 }
 
 struct SetTask {
     id: Id,
     size: u32,
-    on_result: Sender<()>,
+    on_result: Sender<SourceSetResponse>,
 }
 
 enum ImplMessage {
     Message(SourceMessage),
     GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(WriteResult),
+    SetWriteDataResult(FileWriteResponse),
 }
 
 impl Actor for Source {
@@ -168,7 +169,7 @@ impl Source {
     fn on_set_write_data_result(
         &mut self,
         ctx: &mut Context,
-        result: WriteResult,
+        result: FileWriteResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
 
@@ -179,7 +180,8 @@ impl Source {
             .context("failed to get pending set task")?;
 
         // Write the index
-        self.send_write_index(ctx, result.id, task, result.offset);
+        let offset = result.result?;
+        self.send_write_index(ctx, result.id, task, offset);
 
         Ok(())
     }
@@ -199,7 +201,9 @@ impl Source {
             id: task.id,
             offset,
             size: task.size,
-            on_result: task.on_result,
+            on_result: task
+                .on_result
+                .map(move |_| SourceSetResponse { id, result: Ok(()) }),
         };
         let message = IndexServiceMessage {
             id,
@@ -214,12 +218,15 @@ impl Source {
         id: Uuid,
         offset: u64,
         size: u32,
-        on_result: Sender<ReadResult>,
+        on_result: Sender<SourceGetResponse>,
     ) {
         let action = FileRead {
             offset,
             size: size as u64,
-            on_result,
+            on_result: on_result.map(|f: FileReadResponse| SourceGetResponse {
+                id: f.id,
+                result: f.result,
+            }),
         };
         let message = FileMessage {
             id,
