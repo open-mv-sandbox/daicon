@@ -8,25 +8,21 @@ use uuid::Uuid;
 
 use crate::{
     indices::{self, IndexAction, IndexGet, IndexServiceMessage, IndexSet},
-    protocol::{
-        FileAction, FileMessage, FileRead, FileReadResponse, FileWrite, FileWriteResponse,
-        SourceAction, SourceGet, SourceGetResponse, SourceMessage, SourceSet, SourceSetResponse,
-        WriteLocation,
-    },
+    protocol::{file, source},
     OpenMode, OpenOptions,
 };
 
 /// Open a file as a daicon source.
-#[instrument("Source", skip_all)]
+#[instrument("daicon::open_file_source", skip_all)]
 pub fn open_file_source(
     ctx: &mut Context,
-    file: Sender<FileMessage>,
+    file: Sender<file::Message>,
     mode: OpenMode,
     options: OpenOptions,
-) -> Result<Sender<SourceMessage>, Error> {
+) -> Result<Sender<source::Message>, Error> {
     event!(Level::INFO, ?mode, "opening");
 
-    let (mut ctx, sender) = ctx.create()?;
+    let (mut ctx, sender) = ctx.create("daicon-source")?;
 
     let indices = indices::start(&mut ctx, file.clone(), mode, options)?;
 
@@ -47,7 +43,7 @@ pub fn open_file_source(
 
 struct Source {
     sender: Sender<ImplMessage>,
-    file: Sender<FileMessage>,
+    file: Sender<file::Message>,
     indices: Sender<IndexServiceMessage>,
 
     // Ongoing tracked requests
@@ -56,25 +52,24 @@ struct Source {
 }
 
 struct GetTask {
-    on_result: Sender<SourceGetResponse>,
+    on_result: Sender<source::ActionGetResponse>,
 }
 
 struct SetTask {
     id: Id,
     size: u32,
-    on_result: Sender<SourceSetResponse>,
+    on_result: Sender<source::ActionSetResponse>,
 }
 
 enum ImplMessage {
-    Message(SourceMessage),
+    Message(source::Message),
     GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(FileWriteResponse),
+    SetWriteDataResult(file::ActionWriteResponse),
 }
 
 impl Actor for Source {
     type Message = ImplMessage;
 
-    #[instrument("Source", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
@@ -95,12 +90,12 @@ impl Actor for Source {
 }
 
 impl Source {
-    fn on_message(&mut self, ctx: &mut Context, message: SourceMessage) -> Result<(), Error> {
+    fn on_message(&mut self, ctx: &mut Context, message: source::Message) -> Result<(), Error> {
         match message.action {
-            SourceAction::Get(action) => {
+            source::Action::Get(action) => {
                 self.on_get(ctx, message.id, action)?;
             }
-            SourceAction::Set(action) => {
+            source::Action::Set(action) => {
                 self.on_set(ctx, message.id, action)?;
             }
         }
@@ -108,7 +103,12 @@ impl Source {
         Ok(())
     }
 
-    fn on_get(&mut self, ctx: &mut Context, id: Uuid, action: SourceGet) -> Result<(), Error> {
+    fn on_get(
+        &mut self,
+        ctx: &mut Context,
+        id: Uuid,
+        action: source::ActionGet,
+    ) -> Result<(), Error> {
         event!(Level::INFO, id = ?action.id, "received get");
 
         // Track the get task
@@ -123,7 +123,12 @@ impl Source {
         Ok(())
     }
 
-    fn on_set(&mut self, ctx: &mut Context, id: Uuid, action: SourceSet) -> Result<(), Error> {
+    fn on_set(
+        &mut self,
+        ctx: &mut Context,
+        id: Uuid,
+        action: source::ActionSet,
+    ) -> Result<(), Error> {
         event!(
             Level::INFO,
             id = ?action.id,
@@ -169,7 +174,7 @@ impl Source {
     fn on_set_write_data_result(
         &mut self,
         ctx: &mut Context,
-        result: FileWriteResponse,
+        result: file::ActionWriteResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
 
@@ -203,7 +208,7 @@ impl Source {
             size: task.size,
             on_result: task
                 .on_result
-                .map(move |_| SourceSetResponse { id, result: Ok(()) }),
+                .map(move |_| source::ActionSetResponse { id, result: Ok(()) }),
         };
         let message = IndexServiceMessage {
             id,
@@ -218,32 +223,32 @@ impl Source {
         id: Uuid,
         offset: u64,
         size: u32,
-        on_result: Sender<SourceGetResponse>,
+        on_result: Sender<source::ActionGetResponse>,
     ) {
-        let action = FileRead {
+        let action = file::ActionRead {
             offset,
             size: size as u64,
-            on_result: on_result.map(|f: FileReadResponse| SourceGetResponse {
+            on_result: on_result.map(|f: file::ActionReadResponse| source::ActionGetResponse {
                 id: f.id,
                 result: f.result,
             }),
         };
-        let message = FileMessage {
+        let message = file::Message {
             id,
-            action: FileAction::Read(action),
+            action: file::Action::Read(action),
         };
         self.file.send(ctx, message);
     }
 
     fn send_write_data(&self, ctx: &mut Context, id: Uuid, data: Vec<u8>) {
-        let file_action = FileWrite {
-            location: WriteLocation::Append,
+        let file_action = file::ActionWrite {
+            location: file::Location::Append,
             data,
             on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
         };
-        let message = FileMessage {
+        let message = file::Message {
             id,
-            action: FileAction::Write(file_action),
+            action: file::Action::Write(file_action),
         };
         self.file.send(ctx, message);
     }

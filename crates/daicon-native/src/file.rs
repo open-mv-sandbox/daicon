@@ -4,21 +4,19 @@ use std::{
 };
 
 use anyhow::{Context as _, Error};
-use daicon::protocol::{
-    FileAction, FileMessage, FileReadResponse, FileWriteResponse, WriteLocation,
-};
+use daicon::protocol::file;
 use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 
-#[instrument("SystemFile", skip_all)]
+#[instrument("daicon-native::open_system_file", skip_all)]
 pub fn open_system_file(
     ctx: &mut Context,
     path: String,
     truncate: bool,
-) -> Result<Sender<FileMessage>, Error> {
+) -> Result<Sender<file::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (mut ctx, sender) = ctx.create()?;
+    let (mut ctx, sender) = ctx.create("system-file")?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -39,13 +37,12 @@ struct SystemFile {
 }
 
 impl Actor for SystemFile {
-    type Message = FileMessage;
+    type Message = file::Message;
 
-    #[instrument("SystemFile", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message.action {
-                FileAction::Read(action) => {
+                file::Action::Read(action) => {
                     // TODO: Currently remaining bytes after EOF are kept zero, but maybe we want to
                     // feedback a lack of remaining bytes.
 
@@ -55,17 +52,17 @@ impl Actor for SystemFile {
                     read_exact_eof(&mut self.file, &mut data)?;
 
                     // Reply result
-                    let result = FileReadResponse {
+                    let result = file::ActionReadResponse {
                         id: message.id,
                         result: Ok(data),
                     };
                     action.on_result.send(ctx, result);
                 }
-                FileAction::Write(action) => {
+                file::Action::Write(action) => {
                     // Seek to given location
                     let from = match action.location {
-                        WriteLocation::Offset(offset) => SeekFrom::Start(offset),
-                        WriteLocation::Append => SeekFrom::End(0),
+                        file::Location::Offset(offset) => SeekFrom::Start(offset),
+                        file::Location::Append => SeekFrom::End(0),
                     };
                     self.file.seek(from)?;
                     let offset = self.file.stream_position()?;
@@ -74,7 +71,7 @@ impl Actor for SystemFile {
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = FileWriteResponse {
+                    let result = file::ActionWriteResponse {
                         id: message.id,
                         result: Ok(offset),
                     };

@@ -13,11 +13,11 @@ pub struct CreateCommand {
     target: String,
 }
 
-#[instrument("CreateCommandService", skip_all)]
+#[instrument("daicon-tools::start_create_command", skip_all)]
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
-    let (mut ctx, _) = ctx.create::<()>()?;
+    let (mut ctx, _) = ctx.create::<()>("command-create")?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), true)?;

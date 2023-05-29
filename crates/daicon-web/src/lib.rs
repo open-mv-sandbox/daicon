@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
 use anyhow::{Context as _, Error};
-use daicon::protocol::{FileAction, FileMessage, FileRead, FileReadResponse};
+use daicon::protocol::file;
 use js_sys::{ArrayBuffer, Uint8Array};
 use stewart::{Actor, Context, Schedule, Sender, State, World};
 use tracing::{event, instrument, Level};
@@ -10,13 +10,13 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
-#[instrument("SystemFile", skip_all)]
+#[instrument("daicon-web::open_fetch_file", skip_all)]
 pub fn open_fetch_file(
     ctx: &mut Context,
     url: String,
     hnd: WorldHandle,
-) -> Result<Sender<FileMessage>, Error> {
-    let (mut ctx, sender) = ctx.create()?;
+) -> Result<Sender<file::Message>, Error> {
+    let (mut ctx, sender) = ctx.create("fetch-file")?;
 
     let actor = FetchFile {
         hnd,
@@ -35,13 +35,12 @@ struct FetchFile {
     sender: Sender<MessageImpl>,
     url: String,
 
-    pending: HashMap<Uuid, FileRead>,
+    pending: HashMap<Uuid, file::ActionRead>,
 }
 
 impl Actor for FetchFile {
     type Message = MessageImpl;
 
-    #[instrument("SystemFile", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
@@ -59,18 +58,18 @@ impl Actor for FetchFile {
 }
 
 impl FetchFile {
-    fn on_message(&mut self, message: FileMessage) {
+    fn on_message(&mut self, message: file::Message) {
         match message.action {
-            FileAction::Read(action) => {
+            file::Action::Read(action) => {
                 self.on_read(message.id, action);
             }
-            FileAction::Write { .. } => {
+            file::Action::Write { .. } => {
                 // TODO: Report back invalid operation
             }
         }
     }
 
-    fn on_read(&mut self, id: Uuid, action: FileRead) {
+    fn on_read(&mut self, id: Uuid, action: file::ActionRead) {
         event!(Level::INFO, "received read");
 
         let range = action.offset..(action.offset + action.size);
@@ -94,7 +93,7 @@ impl FetchFile {
 
         let pending = self.pending.remove(&id).context("failed to find pending")?;
 
-        let message = FileReadResponse {
+        let message = file::ActionReadResponse {
             id,
             result: Ok(data),
         };
@@ -105,7 +104,7 @@ impl FetchFile {
 }
 
 enum MessageImpl {
-    Message(FileMessage),
+    Message(file::Message),
     FetchResult { id: Uuid, data: Vec<u8> },
 }
 

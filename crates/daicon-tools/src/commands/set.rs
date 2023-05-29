@@ -1,10 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{
-    open_file_source,
-    protocol::{SourceAction, SourceMessage, SourceSet, SourceSetResponse},
-    OpenMode, OpenOptions,
-};
+use daicon::{open_file_source, protocol::source, OpenMode, OpenOptions};
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, State};
 use tracing::{event, instrument, Level};
@@ -28,13 +24,13 @@ pub struct SetCommand {
     input: String,
 }
 
-#[instrument("SetCommandService", skip_all)]
+#[instrument("daicon-tools::start_set_command", skip_all)]
 pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 
     let id = parse_hex(&command.id)?;
 
-    let (mut ctx, sender) = ctx.create()?;
+    let (mut ctx, sender) = ctx.create("command-set")?;
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
@@ -42,14 +38,14 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;
-    let action = SourceSet {
+    let action = source::ActionSet {
         id,
         data,
         on_result: sender.map(Message::Result),
     };
-    let message = SourceMessage {
+    let message = source::Message {
         id: Uuid::new_v4(),
-        action: SourceAction::Set(action),
+        action: source::Action::Set(action),
     };
     source.send(&mut ctx, message);
 
@@ -65,11 +61,11 @@ impl Actor for SetCommandService {
     type Message = Message;
 
     #[instrument("SetCommandService", skip_all)]
-    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(&mut self, _ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 Message::Result(_) => {
-                    ctx.stop()?;
+                    state.stop();
                 }
             }
         }
@@ -79,5 +75,5 @@ impl Actor for SetCommandService {
 }
 
 enum Message {
-    Result(SourceSetResponse),
+    Result(source::ActionSetResponse),
 }

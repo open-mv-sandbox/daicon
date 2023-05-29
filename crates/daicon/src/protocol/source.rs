@@ -1,37 +1,39 @@
 use anyhow::Error;
-use daicon_types::Id;
 use stewart::Sender;
 use uuid::Uuid;
 
-pub struct SourceMessage {
+// We use this in the protocol, so re-export it.
+pub use daicon_types::Id;
+
+pub struct Message {
     pub id: Uuid,
-    pub action: SourceAction,
+    pub action: Action,
 }
 
-pub enum SourceAction {
+pub enum Action {
     /// Get the data associated with an ID.
-    Get(SourceGet),
+    Get(ActionGet),
     /// Set the data associated with an ID.
-    Set(SourceSet),
+    Set(ActionSet),
 }
 
-pub struct SourceGet {
+pub struct ActionGet {
     pub id: Id,
-    pub on_result: Sender<SourceGetResponse>,
+    pub on_result: Sender<ActionGetResponse>,
 }
 
-pub struct SourceGetResponse {
+pub struct ActionGetResponse {
     pub id: Uuid,
     pub result: Result<Vec<u8>, Error>,
 }
 
-pub struct SourceSet {
+pub struct ActionSet {
     pub id: Id,
     pub data: Vec<u8>,
-    pub on_result: Sender<SourceSetResponse>,
+    pub on_result: Sender<ActionSetResponse>,
 }
 
-pub struct SourceSetResponse {
+pub struct ActionSetResponse {
     pub id: Uuid,
     pub result: Result<(), Error>,
 }

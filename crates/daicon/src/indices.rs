@@ -12,21 +12,18 @@ use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{
-    protocol::{FileAction, FileMessage, FileRead, FileReadResponse, FileWrite, WriteLocation},
-    OpenMode, OpenOptions,
-};
+use crate::{protocol::file, OpenMode, OpenOptions};
 
-#[instrument("IndexService", skip_all)]
+#[instrument("daicon::start_indices", skip_all)]
 pub fn start(
     ctx: &mut Context,
-    file: Sender<FileMessage>,
+    file: Sender<file::Message>,
     mode: OpenMode,
     options: OpenOptions,
 ) -> Result<Sender<IndexServiceMessage>, Error> {
     event!(Level::DEBUG, "starting");
 
-    let (mut ctx, sender) = ctx.create()?;
+    let (mut ctx, sender) = ctx.create("daicon-indices")?;
 
     let mut tables = Vec::new();
 
@@ -52,7 +49,7 @@ pub fn start(
     }
 
     // Start the actor
-    let actor = IndexService {
+    let actor = Service {
         file,
 
         tables: Vec::new(),
@@ -86,18 +83,17 @@ pub struct IndexSet {
     pub on_result: Sender<()>,
 }
 
-struct IndexService {
-    file: Sender<FileMessage>,
+struct Service {
+    file: Sender<file::Message>,
 
     tables: Vec<Table>,
     get_tasks: HashMap<Uuid, IndexGet>,
     set_tasks: HashMap<Uuid, IndexSet>,
 }
 
-impl Actor for IndexService {
+impl Actor for Service {
     type Message = ImplMessage;
 
-    #[instrument("IndexService", skip_all)]
     fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
@@ -112,7 +108,7 @@ impl Actor for IndexService {
     }
 }
 
-impl IndexService {
+impl Service {
     fn on_message(&mut self, message: IndexServiceMessage) {
         match message.action {
             IndexAction::Get(action) => {
@@ -126,7 +122,7 @@ impl IndexService {
         }
     }
 
-    fn on_read_result(&mut self, message: FileReadResponse) -> Result<(), Error> {
+    fn on_read_result(&mut self, message: file::ActionReadResponse) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
 
         let table = parse_table(message)?;
@@ -219,7 +215,7 @@ impl Table {
 
 enum ImplMessage {
     Message(IndexServiceMessage),
-    ReadResult(FileReadResponse),
+    ReadResult(file::ActionReadResponse),
 }
 
 fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
@@ -228,26 +224,26 @@ fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
 
 fn read_table(
     ctx: &mut Context,
-    file: &Sender<FileMessage>,
+    file: &Sender<file::Message>,
     sender: Sender<ImplMessage>,
 ) -> Result<(), Error> {
     // Start reading the first header
     let size = (size_of::<Header>() + (size_of::<Index>() * 256)) as u64;
-    let action = FileRead {
+    let action = file::ActionRead {
         offset: 0,
         size,
         on_result: sender.map(ImplMessage::ReadResult),
     };
-    let message = FileMessage {
+    let message = file::Message {
         id: Uuid::new_v4(),
-        action: FileAction::Read(action),
+        action: file::Action::Read(action),
     };
     file.send(ctx, message);
 
     Ok(())
 }
 
-fn parse_table(response: FileReadResponse) -> Result<Table, Error> {
+fn parse_table(response: file::ActionReadResponse) -> Result<Table, Error> {
     // TODO: Retry if the table's valid data is larger than what we've read.
     //  This happens if the read length heuristic is too small, we need to retry then.
 
@@ -271,7 +267,11 @@ fn parse_table(response: FileReadResponse) -> Result<Table, Error> {
     Ok(table)
 }
 
-fn write_table(ctx: &mut Context, file: &Sender<FileMessage>, table: &Table) -> Result<(), Error> {
+fn write_table(
+    ctx: &mut Context,
+    file: &Sender<file::Message>,
+    table: &Table,
+) -> Result<(), Error> {
     let mut data = Vec::new();
 
     // Write the header
@@ -293,14 +293,14 @@ fn write_table(ctx: &mut Context, file: &Sender<FileMessage>, table: &Table) -> 
     }
 
     // Send to file for writing
-    let action = FileWrite {
-        location: WriteLocation::Offset(table.location),
+    let action = file::ActionWrite {
+        location: file::Location::Offset(table.location),
         data,
         on_result: Sender::noop(),
     };
-    let message = FileMessage {
+    let message = file::Message {
         id: Uuid::new_v4(),
-        action: FileAction::Write(action),
+        action: file::Action::Write(action),
     };
     file.send(ctx, message);
 
