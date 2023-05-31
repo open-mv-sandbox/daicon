@@ -64,7 +64,7 @@ struct SetTask {
 enum ImplMessage {
     Message(source::Message),
     GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(file::ActionWriteResponse),
+    SetWriteDataResult(file::ActionAppendResponse),
 }
 
 impl Actor for Source {
@@ -174,7 +174,7 @@ impl Source {
     fn on_set_write_data_result(
         &mut self,
         ctx: &mut Context,
-        result: file::ActionWriteResponse,
+        result: file::ActionAppendResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
 
@@ -241,14 +241,13 @@ impl Source {
     }
 
     fn send_write_data(&self, ctx: &mut Context, id: Uuid, data: Vec<u8>) {
-        let file_action = file::ActionWrite {
-            location: file::Location::Append,
+        let action = file::ActionAppend {
             data,
             on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
         };
         let message = file::Message {
             id,
-            action: file::Action::Write(file_action),
+            action: file::Action::Append(action),
         };
         self.file.send(ctx, message);
     }

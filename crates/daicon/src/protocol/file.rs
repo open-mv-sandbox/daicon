@@ -12,8 +12,14 @@ pub struct Message {
 
 /// Action to perform on a file.
 pub enum Action {
+    /// Read a section of data.
     Read(ActionRead),
+    /// Write a section of data.
     Write(ActionWrite),
+    /// Append new data to the end of the file.
+    ///
+    /// A file can support `Write` but not `Append`.
+    Append(ActionAppend),
 }
 
 pub struct ActionRead {
@@ -31,19 +37,26 @@ pub struct ActionReadResponse {
 }
 
 pub struct ActionWrite {
-    pub location: Location,
+    pub offset: u64,
     pub data: Vec<u8>,
     pub on_result: Sender<ActionWriteResponse>,
 }
 
-/// Location for `FileWrite`.
-pub enum Location {
-    Offset(u64),
-    Append,
-}
-
 /// Result of `FileWrite`.
 pub struct ActionWriteResponse {
+    /// Identifier of originating message.
+    pub id: Uuid,
+    /// Result of the write action.
+    pub result: Result<(), Error>,
+}
+
+pub struct ActionAppend {
+    pub data: Vec<u8>,
+    pub on_result: Sender<ActionAppendResponse>,
+}
+
+/// Result of `ActionAppend`.
+pub struct ActionAppendResponse {
     /// Identifier of originating message.
     pub id: Uuid,
     /// Result of the write action, containing the offset written to.

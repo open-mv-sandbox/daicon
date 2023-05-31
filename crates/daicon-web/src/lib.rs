@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
-use anyhow::{Context as _, Error};
+use anyhow::{anyhow, Context as _, Error};
 use daicon::protocol::file;
 use js_sys::{ArrayBuffer, Uint8Array};
 use stewart::{Actor, Context, Schedule, Sender, State, World};
@@ -45,7 +45,7 @@ impl Actor for FetchFile {
         while let Some(message) = state.next() {
             match message {
                 MessageImpl::Message(message) => {
-                    self.on_message(message);
+                    self.on_message(ctx, message);
                 }
                 MessageImpl::FetchResult { id, data } => {
                     self.on_fetch_result(ctx, id, data)?;
@@ -58,13 +58,26 @@ impl Actor for FetchFile {
 }
 
 impl FetchFile {
-    fn on_message(&mut self, message: file::Message) {
+    fn on_message(&mut self, ctx: &mut Context, message: file::Message) {
         match message.action {
             file::Action::Read(action) => {
                 self.on_read(message.id, action);
             }
-            file::Action::Write { .. } => {
-                // TODO: Report back invalid operation
+            file::Action::Write(action) => {
+                // Report back invalid operation
+                let response = file::ActionWriteResponse {
+                    id: message.id,
+                    result: Err(anyhow!("action not supported")),
+                };
+                action.on_result.send(ctx, response);
+            }
+            file::Action::Append(action) => {
+                // Report back invalid operation
+                let response = file::ActionAppendResponse {
+                    id: message.id,
+                    result: Err(anyhow!("action not supported")),
+                };
+                action.on_result.send(ctx, response);
             }
         }
     }

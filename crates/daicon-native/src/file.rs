@@ -60,18 +60,28 @@ impl Actor for SystemFile {
                 }
                 file::Action::Write(action) => {
                     // Seek to given location
-                    let from = match action.location {
-                        file::Location::Offset(offset) => SeekFrom::Start(offset),
-                        file::Location::Append => SeekFrom::End(0),
-                    };
-                    self.file.seek(from)?;
-                    let offset = self.file.stream_position()?;
+                    self.file.seek(SeekFrom::Start(action.offset))?;
 
                     // Perform the write
                     self.file.write_all(&action.data)?;
 
                     // Reply result
                     let result = file::ActionWriteResponse {
+                        id: message.id,
+                        result: Ok(()),
+                    };
+                    action.on_result.send(ctx, result);
+                }
+                file::Action::Append(action) => {
+                    // Seek to given location
+                    self.file.seek(SeekFrom::End(0))?;
+                    let offset = self.file.stream_position()?;
+
+                    // Perform the write
+                    self.file.write_all(&action.data)?;
+
+                    // Reply result
+                    let result = file::ActionAppendResponse {
                         id: message.id,
                         result: Ok(offset),
                     };

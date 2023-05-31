@@ -294,7 +294,7 @@ fn write_table(
 
     // Send to file for writing
     let action = file::ActionWrite {
-        location: file::Location::Offset(table.location),
+        offset: table.location,
         data,
         on_result: Sender::noop(),
     };
