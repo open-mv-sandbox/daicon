@@ -1,5 +1,5 @@
-use anyhow::Error;
 use stewart::Sender;
+use thiserror::Error;
 use uuid::Uuid;
 
 // We use this in the protocol, so re-export it.
@@ -36,4 +36,10 @@ pub struct ActionSet {
 pub struct ActionSetResponse {
     pub id: Uuid,
     pub result: Result<(), Error>,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("internal error")]
+    InternalError { error: String },
 }

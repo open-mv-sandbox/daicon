@@ -1,5 +1,5 @@
-use anyhow::Error;
 use stewart::Sender;
+use thiserror::Error;
 use uuid::Uuid;
 
 /// Message to a file reader/writer actor.
@@ -11,14 +11,14 @@ pub struct Message {
 }
 
 /// Action to perform on a file.
+///
+/// Files may not support all actions, and return an error if an unsupported action is called.
 pub enum Action {
     /// Read a section of data.
     Read(ActionRead),
     /// Write a section of data.
     Write(ActionWrite),
     /// Append new data to the end of the file.
-    ///
-    /// A file can support `Write` but not `Append`.
     Append(ActionAppend),
 }
 
@@ -61,4 +61,12 @@ pub struct ActionAppendResponse {
     pub id: Uuid,
     /// Result of the write action, containing the offset written to.
     pub result: Result<u64, Error>,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("the action is not supported")]
+    ActionNotSupported,
+    #[error("internal error")]
+    InternalError { error: String },
 }

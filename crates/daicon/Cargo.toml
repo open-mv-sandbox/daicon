@@ -11,6 +11,7 @@ license = "MIT OR Apache-2.0"
 anyhow.workspace = true
 bytemuck.workspace = true
 stewart.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 daicon-types.workspace = true

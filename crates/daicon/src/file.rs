@@ -230,7 +230,9 @@ impl Source {
             size: size as u64,
             on_result: on_result.map(|f: file::ActionReadResponse| source::ActionGetResponse {
                 id: f.id,
-                result: f.result,
+                result: f.result.map_err(|e| source::Error::InternalError {
+                    error: e.to_string(),
+                }),
             }),
         };
         let message = file::Message {

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 
-use anyhow::{anyhow, Context as _, Error};
+use anyhow::{Context as _, Error};
 use daicon::protocol::file;
 use js_sys::{ArrayBuffer, Uint8Array};
 use stewart::{Actor, Context, Schedule, Sender, State, World};
@@ -67,7 +67,7 @@ impl FetchFile {
                 // Report back invalid operation
                 let response = file::ActionWriteResponse {
                     id: message.id,
-                    result: Err(anyhow!("action not supported")),
+                    result: Err(file::Error::ActionNotSupported),
                 };
                 action.on_result.send(ctx, response);
             }
@@ -75,7 +75,7 @@ impl FetchFile {
                 // Report back invalid operation
                 let response = file::ActionAppendResponse {
                     id: message.id,
-                    result: Err(anyhow!("action not supported")),
+                    result: Err(file::Error::ActionNotSupported),
                 };
                 action.on_result.send(ctx, response);
             }
