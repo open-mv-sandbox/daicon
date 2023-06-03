@@ -1,19 +1,16 @@
-use std::{
-    collections::HashMap,
-    io::Cursor,
-    io::{Read, Write},
-    mem::size_of,
-    num::NonZeroU64,
-};
+use std::{collections::HashMap, mem::size_of};
 
 use anyhow::Error;
-use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
 use daicon_types::{Header, Id, Index};
 use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{protocol::file, FileSourceOptions};
+use crate::{
+    protocol::file,
+    table::{deserialize_table, serialize_table, Table},
+    FileSourceOptions,
+};
 
 #[instrument("daicon::indices::start", skip_all)]
 pub fn start(
@@ -37,12 +34,8 @@ pub fn start(
         // TODO: Just let the set command trigger a new table allocation
 
         // Start writing immediately at the given offset
-        let table = Table {
-            location: 0,
-            offset: 0,
-            capacity: options.allocate_capacity,
-            entries: Vec::new(),
-        };
+        // TODO: Append first, then store the offset.
+        let table = Table::new(options.allocate_capacity);
 
         write_table(&mut ctx, &file, &table)?;
 
@@ -144,7 +137,8 @@ impl Service {
         // TODO: This is where validation should happen
         // TODO: Retry if the table's valid data is larger than what we've read.
         // This happens if the read length heuristic is too small, we need to retry then.
-        let (table, next) = parse_table(message)?;
+        let data = message.result?;
+        let (table, next) = deserialize_table(data)?;
 
         // Track the table we've at this point successfully parsed
         self.tables.push(table);
@@ -169,10 +163,6 @@ impl Service {
         self.set_tasks
             .retain(|id, action| update_set(ctx, &self.file, &mut self.tables, *id, action));
     }
-}
-
-fn find_in(tables: &[Table], id: Id) -> Option<(u64, u32)> {
-    tables.iter().find_map(|table| table.find(id))
 }
 
 fn update_get(ctx: &mut Context, tables: &[Table], id: Uuid, action: &GetAction) -> bool {
@@ -207,17 +197,15 @@ fn update_set(
 
     // TODO: Allocate a new table if we've read all and we can't find a slot
     if !table.can_insert(action.offset) {
-        event!(Level::ERROR, "cannot insert entry, case not implemented");
+        event!(
+            Level::ERROR,
+            "cannot insert entry, allocation not implemented"
+        );
         return false;
     }
-    let relative = action.offset - table.offset;
 
     // Insert the new entry
-    let mut entry = Index::default();
-    entry.set_id(action.id);
-    entry.set_offset(relative as u32);
-    entry.set_size(action.size);
-    table.entries.push(entry);
+    table.insert(action.id, action.offset, action.size);
 
     // Flush write the table
     write_table(ctx, file, table).unwrap();
@@ -229,37 +217,8 @@ fn update_set(
     false
 }
 
-struct Table {
-    location: u64,
-    offset: u64,
-    capacity: u16,
-    entries: Vec<Index>,
-}
-
-impl Table {
-    fn find(&self, id: Id) -> Option<(u64, u32)> {
-        self.entries
-            .iter()
-            .find(|entry| entry.id() == id)
-            .map(|entry| {
-                let offset = entry.offset() as u64 + self.offset;
-                (offset, entry.size())
-            })
-    }
-
-    fn can_insert(&self, offset: u64) -> bool {
-        // Check if we have any room at all
-        if self.entries.len() >= self.capacity as usize {
-            return false;
-        }
-
-        // Check if the offset is in-range
-        if offset < self.offset || (offset - self.offset) > u32::MAX as u64 {
-            return false;
-        }
-
-        true
-    }
+fn find_in(tables: &[Table], id: Id) -> Option<(u64, u32)> {
+    tables.iter().find_map(|table| table.find(id))
 }
 
 enum ImplMessage {
@@ -291,55 +250,16 @@ fn read_table(
     Ok(())
 }
 
-fn parse_table(response: file::ReadResponse) -> Result<(Table, Option<NonZeroU64>), Error> {
-    let data = response.result?;
-    let mut data = Cursor::new(data);
-
-    // Read the header
-    let mut header = Header::default();
-    data.read_exact(bytes_of_mut(&mut header))?;
-
-    // Read entries
-    let mut entries = vec![Index::default(); header.valid() as usize];
-    data.read_exact(cast_slice_mut(&mut entries))?;
-
-    let table = Table {
-        location: 0,
-        offset: header.offset(),
-        capacity: header.capacity(),
-        entries,
-    };
-    Ok((table, header.next()))
-}
-
 fn write_table(
     ctx: &mut Context,
     file: &Sender<file::Message>,
     table: &Table,
 ) -> Result<(), Error> {
-    let mut data = Vec::new();
-
-    // Write the header
-    let mut header = Header::default();
-    header.set_offset(table.offset);
-    header.set_capacity(table.capacity);
-    header.set_valid(table.entries.len() as u16);
-    data.write_all(bytes_of(&header))?;
-
-    // Write entries
-    for entry in &table.entries {
-        data.write_all(bytes_of(entry))?;
-    }
-
-    // Pad with empty entries
-    let empty = Index::default();
-    for _ in 0..(table.capacity as usize - table.entries.len()) {
-        data.write_all(bytes_of(&empty))?;
-    }
+    let data = serialize_table(table)?;
 
     // Send to file for writing
     let action = file::WriteAction {
-        offset: table.location,
+        offset: table.location(),
         data,
         on_result: Sender::noop(),
     };

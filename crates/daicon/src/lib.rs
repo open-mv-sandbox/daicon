@@ -9,6 +9,7 @@
 mod file_source;
 mod indices;
 pub mod protocol;
+mod table;
 
 pub use self::file_source::open_file_source;
 
