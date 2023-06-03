@@ -6,11 +6,11 @@
 //! Higher level abstractions, such as error checking, can be implemented by implementing the
 //! source protocol on top of another source.
 
-mod file;
+mod file_source;
 mod indices;
 pub mod protocol;
 
-pub use self::file::open_file_source;
+pub use self::file_source::open_file_source;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum OpenMode {
