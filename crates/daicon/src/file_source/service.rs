@@ -7,7 +7,7 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
-    indices::{self, Action, GetAction, SetAction},
+    file_source::indices::{self, Action, GetAction, SetAction},
     protocol::{file, source},
     FileSourceOptions,
 };

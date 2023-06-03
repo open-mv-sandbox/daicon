@@ -13,7 +13,7 @@ pub struct CreateCommand {
     target: String,
 }
 
-#[instrument("daicon-tools::create::start", skip_all)]
+#[instrument("daicon-tools::start_create", skip_all)]
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 

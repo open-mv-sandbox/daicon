@@ -24,7 +24,7 @@ pub struct SetCommand {
     input: String,
 }
 
-#[instrument("daicon-tools::set::start", skip_all)]
+#[instrument("daicon-tools::start_set", skip_all)]
 pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 

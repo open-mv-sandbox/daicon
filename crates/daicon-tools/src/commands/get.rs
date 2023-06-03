@@ -24,7 +24,7 @@ pub struct GetCommand {
     output: String,
 }
 
-#[instrument("daicon-tools::get::start", skip_all)]
+#[instrument("daicon-tools::start_get", skip_all)]
 pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
     event!(Level::INFO, "getting file from package");
 

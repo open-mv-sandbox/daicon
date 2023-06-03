@@ -7,7 +7,7 @@ use anyhow::Error;
 use bytemuck::{bytes_of, bytes_of_mut, cast_slice_mut};
 use daicon_types::{Header, Id, Index};
 
-/// Cached in-memory table.
+/// Cached in-memory file table.
 pub struct Table {
     location: u64,
     offset: u64,
@@ -39,7 +39,7 @@ impl Table {
             })
     }
 
-    pub fn can_insert(&self, offset: u64) -> bool {
+    pub fn try_insert(&mut self, id: Id, offset: u64, size: u32) -> bool {
         // Check if we have any room at all
         if self.entries.len() >= self.capacity as usize {
             return false;
@@ -50,10 +50,7 @@ impl Table {
             return false;
         }
 
-        true
-    }
-
-    pub fn insert(&mut self, id: Id, offset: u64, size: u32) {
+        // We can now insert it
         let relative = offset - self.offset;
 
         let mut entry = Index::default();
@@ -62,6 +59,8 @@ impl Table {
         entry.set_size(size);
 
         self.entries.push(entry);
+
+        true
     }
 }
 
@@ -89,7 +88,7 @@ pub fn serialize_table(table: &Table) -> Result<Vec<u8>, Error> {
     Ok(data)
 }
 
-pub fn deserialize_table(data: Vec<u8>) -> Result<(Table, Option<NonZeroU64>), Error> {
+pub fn deserialize_table(data: &[u8]) -> Result<(Table, Option<NonZeroU64>), Error> {
     let mut data = Cursor::new(data);
 
     // Read the header

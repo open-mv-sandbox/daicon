@@ -7,12 +7,12 @@ use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
 use crate::{
+    file_source::table::{deserialize_table, serialize_table, Table},
     protocol::file,
-    table::{deserialize_table, serialize_table, Table},
     FileSourceOptions,
 };
 
-#[instrument("daicon::indices::start", skip_all)]
+#[instrument("daicon::start_indices", skip_all)]
 pub fn start(
     ctx: &mut Context,
     file: Sender<file::Message>,
@@ -20,7 +20,7 @@ pub fn start(
 ) -> Result<Sender<Message>, Error> {
     event!(Level::DEBUG, "starting");
 
-    let (mut ctx, sender) = ctx.create("daicon-indices")?;
+    let (mut ctx, sender) = ctx.create("daicon-file-indices")?;
 
     let mut tables = Vec::new();
     let mut is_reading = false;
@@ -138,7 +138,7 @@ impl Service {
         // TODO: Retry if the table's valid data is larger than what we've read.
         // This happens if the read length heuristic is too small, we need to retry then.
         let data = message.result?;
-        let (table, next) = deserialize_table(data)?;
+        let (table, next) = deserialize_table(&data)?;
 
         // Track the table we've at this point successfully parsed
         self.tables.push(table);
@@ -196,16 +196,13 @@ fn update_set(
     event!(Level::DEBUG, id = ?action.id, "setting entry");
 
     // TODO: Allocate a new table if we've read all and we can't find a slot
-    if !table.can_insert(action.offset) {
+    if !table.try_insert(action.id, action.offset, action.size) {
         event!(
             Level::ERROR,
             "cannot insert entry, allocation not implemented"
         );
         return false;
     }
-
-    // Insert the new entry
-    table.insert(action.id, action.offset, action.size);
 
     // Flush write the table
     write_table(ctx, file, table).unwrap();
