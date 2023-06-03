@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_file_source, OpenMode, OpenOptions};
+use daicon::{open_file_source, FileSourceOptions};
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, State};
 use tracing::{event, instrument, Level};
@@ -13,7 +13,7 @@ pub struct CreateCommand {
     target: String,
 }
 
-#[instrument("daicon-tools::start_create_command", skip_all)]
+#[instrument("daicon-tools::create::start", skip_all)]
 pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
@@ -21,7 +21,7 @@ pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), true)?;
-    let _source = open_file_source(&mut ctx, file, OpenMode::Create, OpenOptions::default())?;
+    let _source = open_file_source(&mut ctx, file, FileSourceOptions::default())?;
 
     // Start the command actor
     let actor = CreateCommandService {};

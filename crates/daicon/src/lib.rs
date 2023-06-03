@@ -12,17 +12,21 @@ pub mod protocol;
 
 pub use self::file_source::open_file_source;
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum OpenMode {
-    ReadWrite,
-    Create,
-}
-
-pub struct OpenOptions {
+pub struct FileSourceOptions {
+    first_table: Option<u64>,
     allocate_capacity: u16,
 }
 
-impl OpenOptions {
+impl FileSourceOptions {
+    /// Set the first table's offset.
+    ///
+    /// By giving an offset, the file source will start by reading all tables in sequence.
+    /// This will happen concurrently with resolving get actions.
+    pub fn first_table(mut self, value: u64) -> Self {
+        self.first_table = Some(value);
+        self
+    }
+
     /// Sets the default capacity of new created tables.
     pub fn allocate_capacity(mut self, value: u16) -> Self {
         self.allocate_capacity = value;
@@ -30,9 +34,10 @@ impl OpenOptions {
     }
 }
 
-impl Default for OpenOptions {
+impl Default for FileSourceOptions {
     fn default() -> Self {
         Self {
+            first_table: None,
             allocate_capacity: 256,
         }
     }

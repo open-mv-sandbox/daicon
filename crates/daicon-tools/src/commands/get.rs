@@ -1,6 +1,6 @@
 use anyhow::Error;
 use clap::Args;
-use daicon::{open_file_source, protocol::source, OpenMode, OpenOptions};
+use daicon::{open_file_source, protocol::source, FileSourceOptions};
 use daicon_native::open_system_file;
 use stewart::{Actor, Context, State};
 use tracing::{event, instrument, Level};
@@ -24,7 +24,7 @@ pub struct GetCommand {
     output: String,
 }
 
-#[instrument("daicon-tools::start_get_command", skip_all)]
+#[instrument("daicon-tools::get::start", skip_all)]
 pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
     event!(Level::INFO, "getting file from package");
 
@@ -34,7 +34,8 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
-    let source = open_file_source(&mut ctx, file, OpenMode::ReadWrite, OpenOptions::default())?;
+    let options = FileSourceOptions::default().first_table(0);
+    let source = open_file_source(&mut ctx, file, options)?;
 
     // Add the data to the source
     let action = source::GetAction {

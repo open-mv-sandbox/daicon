@@ -3,6 +3,7 @@ use std::{
     io::Cursor,
     io::{Read, Write},
     mem::size_of,
+    num::NonZeroU64,
 };
 
 use anyhow::Error;
@@ -12,47 +13,51 @@ use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{protocol::file, OpenMode, OpenOptions};
+use crate::{protocol::file, FileSourceOptions};
 
 #[instrument("daicon::indices::start", skip_all)]
 pub fn start(
     ctx: &mut Context,
     file: Sender<file::Message>,
-    mode: OpenMode,
-    options: OpenOptions,
+    options: FileSourceOptions,
 ) -> Result<Sender<Message>, Error> {
     event!(Level::DEBUG, "starting");
 
     let (mut ctx, sender) = ctx.create("daicon-indices")?;
 
     let mut tables = Vec::new();
+    let mut is_reading = false;
 
-    // TODO: This is also the validation step, respond if we correctly validated
-    match mode {
-        OpenMode::ReadWrite => {
-            read_table(&mut ctx, &file, sender.clone())?;
-        }
-        OpenMode::Create => {
-            // Start writing immediately at the given offset
-            let table = Table {
-                location: 0,
-                offset: 0,
-                capacity: options.allocate_capacity,
-                entries: Vec::new(),
-            };
+    // TODO: If given a first table, respond with validation results.
 
-            write_table(&mut ctx, &file, &table)?;
+    if let Some(offset) = options.first_table {
+        is_reading = true;
+        read_table(&mut ctx, &file, sender.clone(), offset)?;
+    } else {
+        // TODO: Just let the set command trigger a new table allocation
 
-            // Track the table we just wrote
-            tables.push(table);
-        }
+        // Start writing immediately at the given offset
+        let table = Table {
+            location: 0,
+            offset: 0,
+            capacity: options.allocate_capacity,
+            entries: Vec::new(),
+        };
+
+        write_table(&mut ctx, &file, &table)?;
+
+        // Track the table we just wrote
+        tables.push(table);
     }
 
     // Start the actor
     let actor = Service {
+        sender: sender.clone(),
         file,
 
         tables: Vec::new(),
+        is_reading,
+
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
@@ -80,13 +85,19 @@ pub struct SetAction {
     pub id: Id,
     pub offset: u64,
     pub size: u32,
-    pub on_result: Sender<()>,
+    pub on_result: Sender<Uuid>,
 }
 
 struct Service {
+    sender: Sender<ImplMessage>,
     file: Sender<file::Message>,
 
     tables: Vec<Table>,
+
+    /// If true, the service is currently still reading tables.
+    is_reading: bool,
+
+    // Ongoing tracked actions
     get_tasks: HashMap<Uuid, GetAction>,
     set_tasks: HashMap<Uuid, SetAction>,
 }
@@ -98,7 +109,7 @@ impl Actor for Service {
         while let Some(message) = state.next() {
             match message {
                 ImplMessage::Message(message) => self.on_message(message),
-                ImplMessage::ReadResult(message) => self.on_read_result(message)?,
+                ImplMessage::ReadResult(message) => self.on_read_result(ctx, message)?,
             }
         }
 
@@ -122,11 +133,29 @@ impl Service {
         }
     }
 
-    fn on_read_result(&mut self, message: file::ReadResponse) -> Result<(), Error> {
+    fn on_read_result(
+        &mut self,
+        ctx: &mut Context,
+        message: file::ReadResponse,
+    ) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
 
-        let table = parse_table(message)?;
+        // Attempt to parse the table
+        // TODO: This is where validation should happen
+        // TODO: Retry if the table's valid data is larger than what we've read.
+        // This happens if the read length heuristic is too small, we need to retry then.
+        let (table, next) = parse_table(message)?;
+
+        // Track the table we've at this point successfully parsed
         self.tables.push(table);
+
+        // If we have a next table, queue it up for the next read
+        if let Some(value) = next {
+            read_table(ctx, &self.file, self.sender.clone(), value.get())?;
+        }
+
+        // We're done reading, store so we can start doing tasks that depend on this
+        self.is_reading = false;
 
         Ok(())
     }
@@ -134,50 +163,70 @@ impl Service {
     fn update_tasks(&mut self, ctx: &mut Context) {
         // Resolve gets we can resolve
         self.get_tasks
-            .retain(|id, task| match find(&self.tables, task.id) {
-                Some(value) => {
-                    event!(Level::DEBUG, id = ?task.id, "found entry");
-                    task.on_result.send(ctx, (*id, value.0, value.1));
-                    false
-                }
-                None => true,
-            });
+            .retain(|id, action| update_get(ctx, &self.tables, *id, action));
 
         // Resolve writes we can resolve
-        self.set_tasks.retain(|_, task| {
-            // Find a table with an empty slot
-            let table = if let Some(table) = self.tables.first_mut() {
-                table
-            } else {
-                return true;
-            };
-
-            event!(Level::DEBUG, id = ?task.id, "setting entry");
-
-            // TODO: Allocate a new table if we've read all and we can't find a slot
-            if !table.can_insert(task.offset) {
-                event!(Level::ERROR, "cannot insert entry, case not implemented");
-                return false;
-            }
-            let relative = task.offset - table.offset;
-
-            // Insert the new entry
-            let mut entry = Index::default();
-            entry.set_id(task.id);
-            entry.set_offset(relative as u32);
-            entry.set_size(task.size);
-            table.entries.push(entry);
-
-            // Flush write the table
-            write_table(ctx, &self.file, table).unwrap();
-
-            // Report success
-            // TODO: Wait for write to report back
-            task.on_result.send(ctx, ());
-
-            false
-        });
+        self.set_tasks
+            .retain(|id, action| update_set(ctx, &self.file, &mut self.tables, *id, action));
     }
+}
+
+fn find_in(tables: &[Table], id: Id) -> Option<(u64, u32)> {
+    tables.iter().find_map(|table| table.find(id))
+}
+
+fn update_get(ctx: &mut Context, tables: &[Table], id: Uuid, action: &GetAction) -> bool {
+    let (offset, size) = if let Some(value) = find_in(tables, action.id) {
+        value
+    } else {
+        return true;
+    };
+
+    event!(Level::DEBUG, id = ?action.id, "found entry");
+    action.on_result.send(ctx, (id, offset, size));
+
+    false
+}
+
+fn update_set(
+    ctx: &mut Context,
+    file: &Sender<file::Message>,
+    tables: &mut [Table],
+    id: Uuid,
+    action: &SetAction,
+) -> bool {
+    // Find a table with an empty slot
+    // TODO: We now have more than one table
+    let table = if let Some(table) = tables.first_mut() {
+        table
+    } else {
+        return true;
+    };
+
+    event!(Level::DEBUG, id = ?action.id, "setting entry");
+
+    // TODO: Allocate a new table if we've read all and we can't find a slot
+    if !table.can_insert(action.offset) {
+        event!(Level::ERROR, "cannot insert entry, case not implemented");
+        return false;
+    }
+    let relative = action.offset - table.offset;
+
+    // Insert the new entry
+    let mut entry = Index::default();
+    entry.set_id(action.id);
+    entry.set_offset(relative as u32);
+    entry.set_size(action.size);
+    table.entries.push(entry);
+
+    // Flush write the table
+    write_table(ctx, file, table).unwrap();
+
+    // Report success
+    // TODO: Wait for write to report back
+    action.on_result.send(ctx, id);
+
+    false
 }
 
 struct Table {
@@ -218,19 +267,18 @@ enum ImplMessage {
     ReadResult(file::ReadResponse),
 }
 
-fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
-    tables.iter().find_map(|table| table.find(id))
-}
-
 fn read_table(
     ctx: &mut Context,
     file: &Sender<file::Message>,
     sender: Sender<ImplMessage>,
+    offset: u64,
 ) -> Result<(), Error> {
-    // Start reading the first header
+    // Estimate the size of the table, so we can hopefully prefetch all of it
     let size = (size_of::<Header>() + (size_of::<Index>() * 256)) as u64;
+
+    // Start reading the first header
     let action = file::ReadAction {
-        offset: 0,
+        offset,
         size,
         on_result: sender.map(ImplMessage::ReadResult),
     };
@@ -243,10 +291,7 @@ fn read_table(
     Ok(())
 }
 
-fn parse_table(response: file::ReadResponse) -> Result<Table, Error> {
-    // TODO: Retry if the table's valid data is larger than what we've read.
-    //  This happens if the read length heuristic is too small, we need to retry then.
-
+fn parse_table(response: file::ReadResponse) -> Result<(Table, Option<NonZeroU64>), Error> {
     let data = response.result?;
     let mut data = Cursor::new(data);
 
@@ -264,7 +309,7 @@ fn parse_table(response: file::ReadResponse) -> Result<Table, Error> {
         capacity: header.capacity(),
         entries,
     };
-    Ok(table)
+    Ok((table, header.next()))
 }
 
 fn write_table(

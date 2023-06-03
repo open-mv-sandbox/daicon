@@ -4,7 +4,7 @@ use anyhow::Error;
 use daicon::{
     open_file_source,
     protocol::source::{self, Id},
-    OpenMode, OpenOptions,
+    FileSourceOptions,
 };
 use daicon_web::open_fetch_file;
 use stewart::{Actor, Context, Schedule, State, World};
@@ -29,8 +29,8 @@ fn main() {
     let file = open_fetch_file(&mut ctx, url.to_string(), hnd.clone()).unwrap();
 
     event!(Level::INFO, "initializing daicon service...");
-    let source =
-        open_file_source(&mut ctx, file, OpenMode::ReadWrite, OpenOptions::default()).unwrap();
+    let options = FileSourceOptions::default().first_table(0);
+    let source = open_file_source(&mut ctx, file, options).unwrap();
 
     event!(Level::INFO, "starting example service...");
     ctx.start(ExampleService).unwrap();

@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::{
     indices::{self, Action, GetAction, SetAction},
     protocol::{file, source},
-    OpenMode, OpenOptions,
+    FileSourceOptions,
 };
 
 /// Open a file as a daicon source.
@@ -17,14 +17,13 @@ use crate::{
 pub fn open_file_source(
     ctx: &mut Context,
     file: Sender<file::Message>,
-    mode: OpenMode,
-    options: OpenOptions,
+    options: FileSourceOptions,
 ) -> Result<Sender<source::Message>, Error> {
-    event!(Level::INFO, ?mode, "opening");
+    event!(Level::INFO, "opening");
 
     let (mut ctx, sender) = ctx.create("daicon-file-source")?;
 
-    let indices = indices::start(&mut ctx, file.clone(), mode, options)?;
+    let indices = indices::start(&mut ctx, file.clone(), options)?;
 
     // Start the root manager actor
     let actor = Service {
@@ -46,7 +45,7 @@ struct Service {
     file: Sender<file::Message>,
     indices: Sender<indices::Message>,
 
-    // Ongoing tracked requests
+    // Ongoing tracked actions
     get_tasks: HashMap<Uuid, PendingGet>,
     set_tasks: HashMap<Uuid, PendingSet>,
 }

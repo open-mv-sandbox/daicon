@@ -16,7 +16,7 @@ pub fn open_system_file(
 ) -> Result<Sender<file::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (mut ctx, sender) = ctx.create("system-file")?;
+    let (mut ctx, sender) = ctx.create("daicon-system-file")?;
 
     let file = OpenOptions::new()
         .read(true)
