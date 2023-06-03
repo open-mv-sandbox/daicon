@@ -37,7 +37,7 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
     let source = open_file_source(&mut ctx, file, OpenMode::ReadWrite, OpenOptions::default())?;
 
     // Add the data to the source
-    let action = source::ActionGet {
+    let action = source::GetAction {
         id,
         on_result: sender.map(Message::Result),
     };
@@ -78,5 +78,5 @@ impl Actor for GetCommandService {
 }
 
 enum Message {
-    Result(source::ActionGetResponse),
+    Result(source::GetResponse),
 }

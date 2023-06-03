@@ -36,7 +36,7 @@ fn main() {
     ctx.start(ExampleService).unwrap();
 
     event!(Level::INFO, "dispatching requests...");
-    let action = source::ActionGet {
+    let action = source::GetAction {
         id: Id(0xbacc2ba1),
         on_result: sender.clone(),
     };
@@ -46,7 +46,7 @@ fn main() {
     };
     source.send(&mut ctx, message);
 
-    let action = source::ActionGet {
+    let action = source::GetAction {
         id: Id(0x1f063ad4),
         on_result: sender,
     };
@@ -63,7 +63,7 @@ fn main() {
 struct ExampleService;
 
 impl Actor for ExampleService {
-    type Message = source::ActionGetResponse;
+    type Message = source::GetResponse;
 
     fn process(&mut self, _ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
         while let Some(message) = state.next() {

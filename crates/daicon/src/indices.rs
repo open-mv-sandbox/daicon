@@ -14,13 +14,13 @@ use uuid::Uuid;
 
 use crate::{protocol::file, OpenMode, OpenOptions};
 
-#[instrument("daicon::start_indices", skip_all)]
+#[instrument("daicon::indices::start", skip_all)]
 pub fn start(
     ctx: &mut Context,
     file: Sender<file::Message>,
     mode: OpenMode,
     options: OpenOptions,
-) -> Result<Sender<IndexServiceMessage>, Error> {
+) -> Result<Sender<Message>, Error> {
     event!(Level::DEBUG, "starting");
 
     let (mut ctx, sender) = ctx.create("daicon-indices")?;
@@ -61,22 +61,22 @@ pub fn start(
     Ok(sender.map(ImplMessage::Message))
 }
 
-pub struct IndexServiceMessage {
+pub struct Message {
     pub id: Uuid,
-    pub action: IndexAction,
+    pub action: Action,
 }
 
-pub enum IndexAction {
-    Get(IndexGet),
-    Set(IndexSet),
+pub enum Action {
+    Get(GetAction),
+    Set(SetAction),
 }
 
-pub struct IndexGet {
+pub struct GetAction {
     pub id: Id,
     pub on_result: Sender<(Uuid, u64, u32)>,
 }
 
-pub struct IndexSet {
+pub struct SetAction {
     pub id: Id,
     pub offset: u64,
     pub size: u32,
@@ -87,8 +87,8 @@ struct Service {
     file: Sender<file::Message>,
 
     tables: Vec<Table>,
-    get_tasks: HashMap<Uuid, IndexGet>,
-    set_tasks: HashMap<Uuid, IndexSet>,
+    get_tasks: HashMap<Uuid, GetAction>,
+    set_tasks: HashMap<Uuid, SetAction>,
 }
 
 impl Actor for Service {
@@ -109,20 +109,20 @@ impl Actor for Service {
 }
 
 impl Service {
-    fn on_message(&mut self, message: IndexServiceMessage) {
+    fn on_message(&mut self, message: Message) {
         match message.action {
-            IndexAction::Get(action) => {
+            Action::Get(action) => {
                 event!(Level::DEBUG, id = ?action.id, "received get");
                 self.get_tasks.insert(message.id, action);
             }
-            IndexAction::Set(action) => {
+            Action::Set(action) => {
                 event!(Level::DEBUG, id = ?action.id, "received set");
                 self.set_tasks.insert(message.id, action);
             }
         }
     }
 
-    fn on_read_result(&mut self, message: file::ActionReadResponse) -> Result<(), Error> {
+    fn on_read_result(&mut self, message: file::ReadResponse) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
 
         let table = parse_table(message)?;
@@ -214,8 +214,8 @@ impl Table {
 }
 
 enum ImplMessage {
-    Message(IndexServiceMessage),
-    ReadResult(file::ActionReadResponse),
+    Message(Message),
+    ReadResult(file::ReadResponse),
 }
 
 fn find(tables: &[Table], id: Id) -> Option<(u64, u32)> {
@@ -229,7 +229,7 @@ fn read_table(
 ) -> Result<(), Error> {
     // Start reading the first header
     let size = (size_of::<Header>() + (size_of::<Index>() * 256)) as u64;
-    let action = file::ActionRead {
+    let action = file::ReadAction {
         offset: 0,
         size,
         on_result: sender.map(ImplMessage::ReadResult),
@@ -243,7 +243,7 @@ fn read_table(
     Ok(())
 }
 
-fn parse_table(response: file::ActionReadResponse) -> Result<Table, Error> {
+fn parse_table(response: file::ReadResponse) -> Result<Table, Error> {
     // TODO: Retry if the table's valid data is larger than what we've read.
     //  This happens if the read length heuristic is too small, we need to retry then.
 
@@ -293,7 +293,7 @@ fn write_table(
     }
 
     // Send to file for writing
-    let action = file::ActionWrite {
+    let action = file::WriteAction {
         offset: table.location,
         data,
         on_result: Sender::noop(),

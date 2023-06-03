@@ -52,7 +52,7 @@ impl Actor for SystemFile {
                     read_exact_eof(&mut self.file, &mut data)?;
 
                     // Reply result
-                    let result = file::ActionReadResponse {
+                    let result = file::ReadResponse {
                         id: message.id,
                         result: Ok(data),
                     };
@@ -66,7 +66,7 @@ impl Actor for SystemFile {
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = file::ActionWriteResponse {
+                    let result = file::WriteResponse {
                         id: message.id,
                         result: Ok(()),
                     };
@@ -81,7 +81,7 @@ impl Actor for SystemFile {
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = file::ActionAppendResponse {
+                    let result = file::AppendResponse {
                         id: message.id,
                         result: Ok(offset),
                     };

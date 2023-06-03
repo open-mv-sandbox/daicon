@@ -38,7 +38,7 @@ pub fn start(ctx: &mut Context, command: SetCommand) -> Result<(), Error> {
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;
-    let action = source::ActionSet {
+    let action = source::SetAction {
         id,
         data,
         on_result: sender.map(Message::Result),
@@ -75,5 +75,5 @@ impl Actor for SetCommandService {
 }
 
 enum Message {
-    Result(source::ActionSetResponse),
+    Result(source::SetResponse),
 }

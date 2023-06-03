@@ -15,48 +15,55 @@ pub struct Message {
 /// Files may not support all actions, and return an error if an unsupported action is called.
 pub enum Action {
     /// Read a section of data.
-    Read(ActionRead),
+    Read(ReadAction),
     /// Write a section of data.
-    Write(ActionWrite),
+    Write(WriteAction),
     /// Append new data to the end of the file.
-    Append(ActionAppend),
+    Append(AppendAction),
 }
 
-pub struct ActionRead {
+/// Read a section of data.
+pub struct ReadAction {
     pub offset: u64,
     pub size: u64,
-    pub on_result: Sender<ActionReadResponse>,
+    pub on_result: Sender<ReadResponse>,
 }
 
-/// Result of `FileRead`.
-pub struct ActionReadResponse {
+/// Result of `ReadAction`.
+pub struct ReadResponse {
     /// Identifier of originating message.
     pub id: Uuid,
     /// Result of the read action, containing the data read.
     pub result: Result<Vec<u8>, Error>,
 }
 
-pub struct ActionWrite {
+/// Write a section of data.
+///
+/// The range of data has to be within the file, first validate that the region exists.
+/// If you want to add new data, append it to the end of the file.
+/// TODO: This requirement is not yet implemented in file implementations.
+pub struct WriteAction {
     pub offset: u64,
     pub data: Vec<u8>,
-    pub on_result: Sender<ActionWriteResponse>,
+    pub on_result: Sender<WriteResponse>,
 }
 
-/// Result of `FileWrite`.
-pub struct ActionWriteResponse {
+/// Result of `WriteAction`.
+pub struct WriteResponse {
     /// Identifier of originating message.
     pub id: Uuid,
     /// Result of the write action.
     pub result: Result<(), Error>,
 }
 
-pub struct ActionAppend {
+/// Append new data to the end of the file.
+pub struct AppendAction {
     pub data: Vec<u8>,
-    pub on_result: Sender<ActionAppendResponse>,
+    pub on_result: Sender<AppendResponse>,
 }
 
-/// Result of `ActionAppend`.
-pub struct ActionAppendResponse {
+/// Result of `AppendAction`.
+pub struct AppendResponse {
     /// Identifier of originating message.
     pub id: Uuid,
     /// Result of the write action, containing the offset written to.
@@ -65,7 +72,7 @@ pub struct ActionAppendResponse {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("the action is not supported")]
+    #[error("the action is not supported by this file service")]
     ActionNotSupported,
     #[error("internal error")]
     InternalError { error: String },

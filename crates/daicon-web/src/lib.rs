@@ -35,7 +35,7 @@ struct FetchFile {
     sender: Sender<MessageImpl>,
     url: String,
 
-    pending: HashMap<Uuid, file::ActionRead>,
+    pending: HashMap<Uuid, file::ReadAction>,
 }
 
 impl Actor for FetchFile {
@@ -65,7 +65,7 @@ impl FetchFile {
             }
             file::Action::Write(action) => {
                 // Report back invalid operation
-                let response = file::ActionWriteResponse {
+                let response = file::WriteResponse {
                     id: message.id,
                     result: Err(file::Error::ActionNotSupported),
                 };
@@ -73,7 +73,7 @@ impl FetchFile {
             }
             file::Action::Append(action) => {
                 // Report back invalid operation
-                let response = file::ActionAppendResponse {
+                let response = file::AppendResponse {
                     id: message.id,
                     result: Err(file::Error::ActionNotSupported),
                 };
@@ -82,7 +82,7 @@ impl FetchFile {
         }
     }
 
-    fn on_read(&mut self, id: Uuid, action: file::ActionRead) {
+    fn on_read(&mut self, id: Uuid, action: file::ReadAction) {
         event!(Level::INFO, "received read");
 
         let range = action.offset..(action.offset + action.size);
@@ -106,7 +106,7 @@ impl FetchFile {
 
         let pending = self.pending.remove(&id).context("failed to find pending")?;
 
-        let message = file::ActionReadResponse {
+        let message = file::ReadResponse {
             id,
             result: Ok(data),
         };
