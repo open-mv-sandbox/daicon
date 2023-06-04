@@ -5,17 +5,17 @@ mod table;
 pub use self::service::open_file_source;
 
 pub struct FileSourceOptions {
-    first_table: Option<u64>,
+    open_table: Option<u64>,
     allocate_capacity: u16,
 }
 
 impl FileSourceOptions {
-    /// Set the first table's offset.
+    /// Set the offset of the first table to open.
     ///
     /// By giving an offset, the file source will start by reading all tables in sequence.
     /// This will happen concurrently with resolving get actions.
-    pub fn first_table(mut self, value: u64) -> Self {
-        self.first_table = Some(value);
+    pub fn open_table(mut self, value: u64) -> Self {
+        self.open_table = Some(value);
         self
     }
 
@@ -29,7 +29,7 @@ impl FileSourceOptions {
 impl Default for FileSourceOptions {
     fn default() -> Self {
         Self {
-            first_table: None,
+            open_table: None,
             allocate_capacity: 256,
         }
     }

@@ -2,13 +2,12 @@ mod commands;
 
 use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};
-use commands::get::GetCommand;
 use daicon_types::Id;
 use stewart::{Context, Schedule, World};
 use tracing::{event, Level};
 use tracing_subscriber::{prelude::*, EnvFilter, FmtSubscriber};
 
-use crate::commands::{create::CreateCommand, set::SetCommand};
+use crate::commands::{create, get, set};
 
 fn main() {
     let args = CliArgs::parse();
@@ -62,9 +61,9 @@ struct CliArgs {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    Create(CreateCommand),
-    Set(SetCommand),
-    Get(GetCommand),
+    Create(create::Command),
+    Set(set::Command),
+    Get(get::Command),
 }
 
 fn parse_hex(str: &str) -> Result<Id, Error> {

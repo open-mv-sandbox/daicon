@@ -29,7 +29,7 @@ fn main() {
     let file = open_fetch_file(&mut ctx, url.to_string(), hnd.clone()).unwrap();
 
     event!(Level::INFO, "initializing daicon service...");
-    let options = FileSourceOptions::default().first_table(0);
+    let options = FileSourceOptions::default().open_table(0);
     let source = open_file_source(&mut ctx, file, options).unwrap();
 
     event!(Level::INFO, "starting example service...");

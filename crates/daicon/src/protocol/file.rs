@@ -18,7 +18,7 @@ pub enum Action {
     Read(ReadAction),
     /// Write a section of data.
     Write(WriteAction),
-    /// Append new data to the end of the file.
+    /// Append data to the end of the file.
     Append(AppendAction),
 }
 
@@ -56,7 +56,7 @@ pub struct WriteResponse {
     pub result: Result<(), Error>,
 }
 
-/// Append new data to the end of the file.
+/// Append data to the end of the file.
 pub struct AppendAction {
     pub data: Vec<u8>,
     pub on_result: Sender<AppendResponse>,
@@ -72,7 +72,7 @@ pub struct AppendResponse {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("the action is not supported by this file service")]
+    #[error("action not supported by the file")]
     ActionNotSupported,
     #[error("internal error")]
     InternalError { error: String },

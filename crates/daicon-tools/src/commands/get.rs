@@ -10,7 +10,7 @@ use crate::parse_hex;
 
 /// Get an entry from a daicon file.
 #[derive(Args, Debug)]
-pub struct GetCommand {
+pub struct Command {
     /// Path of the target file.
     #[arg(short, long, value_name = "PATH")]
     target: String,
@@ -25,7 +25,7 @@ pub struct GetCommand {
 }
 
 #[instrument("daicon-tools::start_get", skip_all)]
-pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
+pub fn start(ctx: &mut Context, command: Command) -> Result<(), Error> {
     event!(Level::INFO, "getting file from package");
 
     let id = parse_hex(&command.id)?;
@@ -34,7 +34,7 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
 
     // Open the target file
     let file = open_system_file(&mut ctx, command.target.clone(), false)?;
-    let options = FileSourceOptions::default().first_table(0);
+    let options = FileSourceOptions::default().open_table(0);
     let source = open_file_source(&mut ctx, file, options)?;
 
     // Add the data to the source
@@ -55,7 +55,7 @@ pub fn start(ctx: &mut Context, command: GetCommand) -> Result<(), Error> {
 }
 
 struct GetCommandService {
-    command: GetCommand,
+    command: Command,
 }
 
 impl Actor for GetCommandService {

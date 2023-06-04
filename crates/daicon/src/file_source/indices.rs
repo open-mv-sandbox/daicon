@@ -1,16 +1,12 @@
 use std::{collections::HashMap, mem::size_of};
 
-use anyhow::Error;
+use anyhow::{Context as _, Error};
 use daicon_types::{Header, Id, Index};
 use stewart::{Actor, Context, Sender, State};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
-use crate::{
-    file_source::table::{deserialize_table, serialize_table, Table},
-    protocol::file,
-    FileSourceOptions,
-};
+use crate::{file_source::table::Table, protocol::file, FileSourceOptions};
 
 #[instrument("daicon::start_indices", skip_all)]
 pub fn start(
@@ -23,21 +19,20 @@ pub fn start(
     let (mut ctx, sender) = ctx.create("daicon-file-indices")?;
 
     let mut tables = Vec::new();
-    let mut is_reading = false;
+    let mut pending_read = None;
 
-    // TODO: If given a first table, respond with validation results.
+    // TODO: Respond with validation results, success of open or create.
 
-    if let Some(offset) = options.first_table {
-        is_reading = true;
+    if let Some(offset) = options.open_table {
+        // Start opening by reading the first table
+        pending_read = Some(offset);
         read_table(&mut ctx, &file, sender.clone(), offset)?;
     } else {
-        // TODO: Just let the set command trigger a new table allocation
+        // Write a table immediately at the given offset
 
-        // Start writing immediately at the given offset
-        // TODO: Append first, then store the offset.
+        // TODO: Append to the end of the file, then store the offset.
         let table = Table::new(options.allocate_capacity);
-
-        write_table(&mut ctx, &file, &table)?;
+        write_table(&mut ctx, &file, &table, 0)?;
 
         // Track the table we just wrote
         tables.push(table);
@@ -49,7 +44,7 @@ pub fn start(
         file,
 
         tables: Vec::new(),
-        is_reading,
+        pending_read,
 
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
@@ -85,10 +80,10 @@ struct Service {
     sender: Sender<ImplMessage>,
     file: Sender<file::Message>,
 
-    tables: Vec<Table>,
+    tables: Vec<(u64, Table)>,
 
-    /// If true, the service is currently still reading tables.
-    is_reading: bool,
+    /// If set, the service is currently still reading tables at the given offset.
+    pending_read: Option<u64>,
 
     // Ongoing tracked actions
     get_tasks: HashMap<Uuid, GetAction>,
@@ -138,18 +133,21 @@ impl Service {
         // TODO: Retry if the table's valid data is larger than what we've read.
         // This happens if the read length heuristic is too small, we need to retry then.
         let data = message.result?;
-        let (table, next) = deserialize_table(&data)?;
+        let (table, next) = Table::deserialize(&data)?;
 
         // Track the table we've at this point successfully parsed
-        self.tables.push(table);
+        let offset = self.pending_read.context("no pending read")?;
+        self.tables.push((offset, table));
 
         // If we have a next table, queue it up for the next read
         if let Some(value) = next {
-            read_table(ctx, &self.file, self.sender.clone(), value.get())?;
+            let offset = value.get();
+            read_table(ctx, &self.file, self.sender.clone(), offset)?;
+            self.pending_read = Some(offset);
         }
 
         // We're done reading, store so we can start doing tasks that depend on this
-        self.is_reading = false;
+        self.pending_read = None;
 
         Ok(())
     }
@@ -159,13 +157,13 @@ impl Service {
         self.get_tasks
             .retain(|id, action| update_get(ctx, &self.tables, *id, action));
 
-        // Resolve writes we can resolve
+        // Resolve sets we can resolve
         self.set_tasks
             .retain(|id, action| update_set(ctx, &self.file, &mut self.tables, *id, action));
     }
 }
 
-fn update_get(ctx: &mut Context, tables: &[Table], id: Uuid, action: &GetAction) -> bool {
+fn update_get(ctx: &mut Context, tables: &[(u64, Table)], id: Uuid, action: &GetAction) -> bool {
     let (offset, size) = if let Some(value) = find_in(tables, action.id) {
         value
     } else {
@@ -181,14 +179,14 @@ fn update_get(ctx: &mut Context, tables: &[Table], id: Uuid, action: &GetAction)
 fn update_set(
     ctx: &mut Context,
     file: &Sender<file::Message>,
-    tables: &mut [Table],
+    tables: &mut [(u64, Table)],
     id: Uuid,
     action: &SetAction,
 ) -> bool {
     // Find a table with an empty slot
     // TODO: We now have more than one table
-    let table = if let Some(table) = tables.first_mut() {
-        table
+    let (offset, table) = if let Some(value) = tables.first_mut() {
+        value
     } else {
         return true;
     };
@@ -205,7 +203,7 @@ fn update_set(
     }
 
     // Flush write the table
-    write_table(ctx, file, table).unwrap();
+    write_table(ctx, file, table, *offset).unwrap();
 
     // Report success
     // TODO: Wait for write to report back
@@ -214,8 +212,8 @@ fn update_set(
     false
 }
 
-fn find_in(tables: &[Table], id: Id) -> Option<(u64, u32)> {
-    tables.iter().find_map(|table| table.find(id))
+fn find_in(tables: &[(u64, Table)], id: Id) -> Option<(u64, u32)> {
+    tables.iter().find_map(|(_, table)| table.find(id))
 }
 
 enum ImplMessage {
@@ -251,12 +249,13 @@ fn write_table(
     ctx: &mut Context,
     file: &Sender<file::Message>,
     table: &Table,
+    offset: u64,
 ) -> Result<(), Error> {
-    let data = serialize_table(table)?;
+    let data = table.serialize()?;
 
     // Send to file for writing
     let action = file::WriteAction {
-        offset: table.location(),
+        offset,
         data,
         on_result: Sender::noop(),
     };

@@ -13,6 +13,9 @@ use crate::{
 };
 
 /// Open a file as a daicon source.
+///
+/// If you want to start from an existing table, specify a `open_table` in options.
+/// If `open_table` is not specified, the source will append a new table when required.
 #[instrument("daicon::open_file_source", skip_all)]
 pub fn open_file_source(
     ctx: &mut Context,

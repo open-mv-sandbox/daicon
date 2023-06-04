@@ -7,14 +7,14 @@ use tracing::{event, instrument, Level};
 
 /// Create a new daicon file.
 #[derive(Args, Debug)]
-pub struct CreateCommand {
+pub struct Command {
     /// Path of the target file.
     #[arg(short, long, value_name = "PATH")]
     target: String,
 }
 
 #[instrument("daicon-tools::start_create", skip_all)]
-pub fn start(ctx: &mut Context, command: CreateCommand) -> Result<(), Error> {
+pub fn start(ctx: &mut Context, command: Command) -> Result<(), Error> {
     event!(Level::INFO, "creating package");
 
     let (mut ctx, _) = ctx.create::<()>("command-create")?;

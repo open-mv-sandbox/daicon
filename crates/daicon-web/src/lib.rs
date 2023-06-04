@@ -16,7 +16,7 @@ pub fn open_fetch_file(
     url: String,
     hnd: WorldHandle,
 ) -> Result<Sender<file::Message>, Error> {
-    let (mut ctx, sender) = ctx.create("fetch-file")?;
+    let (mut ctx, sender) = ctx.create("daicon-fetch-file")?;
 
     let actor = FetchFile {
         hnd,

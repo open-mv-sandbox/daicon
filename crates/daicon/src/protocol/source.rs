@@ -6,7 +6,7 @@ use uuid::Uuid;
 pub use daicon_types::Id;
 
 /// Source action message.
-/// 
+///
 /// TODO: Consider if "message" could be higher level and more generic.
 /// This could probably be the basis of a broader message distribution system.
 /// Such a system could make use of the ID system to route messages and responses, in a way that
@@ -25,6 +25,7 @@ pub enum Action {
     List(ListAction),
 }
 
+/// Get the data associated with an ID.
 pub struct GetAction {
     pub id: Id,
     pub on_result: Sender<GetResponse>,
@@ -35,6 +36,7 @@ pub struct GetResponse {
     pub result: Result<Vec<u8>, Error>,
 }
 
+/// Set the data associated with an ID.
 pub struct SetAction {
     pub id: Id,
     pub data: Vec<u8>,
@@ -46,6 +48,7 @@ pub struct SetResponse {
     pub result: Result<(), Error>,
 }
 
+/// Get a list of all indices in the source.
 pub struct ListAction {
     pub on_result: Sender<ListResponse>,
 }

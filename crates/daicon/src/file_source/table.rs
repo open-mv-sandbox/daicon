@@ -9,7 +9,6 @@ use daicon_types::{Header, Id, Index};
 
 /// Cached in-memory file table.
 pub struct Table {
-    location: u64,
     offset: u64,
     capacity: u16,
     entries: Vec<Index>,
@@ -18,15 +17,10 @@ pub struct Table {
 impl Table {
     pub fn new(capacity: u16) -> Self {
         Self {
-            location: 0,
             offset: 0,
             capacity,
             entries: Vec::new(),
         }
-    }
-
-    pub fn location(&self) -> u64 {
-        self.location
     }
 
     pub fn find(&self, id: Id) -> Option<(u64, u32)> {
@@ -62,48 +56,47 @@ impl Table {
 
         true
     }
-}
 
-pub fn serialize_table(table: &Table) -> Result<Vec<u8>, Error> {
-    let mut data = Vec::new();
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        let mut data = Vec::new();
 
-    // Write the header
-    let mut header = Header::default();
-    header.set_offset(table.offset);
-    header.set_capacity(table.capacity);
-    header.set_valid(table.entries.len() as u16);
-    data.write_all(bytes_of(&header))?;
+        // Write the header
+        let mut header = Header::default();
+        header.set_offset(self.offset);
+        header.set_capacity(self.capacity);
+        header.set_valid(self.entries.len() as u16);
+        data.write_all(bytes_of(&header))?;
 
-    // Write entries
-    for entry in &table.entries {
-        data.write_all(bytes_of(entry))?;
+        // Write entries
+        for entry in &self.entries {
+            data.write_all(bytes_of(entry))?;
+        }
+
+        // Pad with empty entries
+        let empty = Index::default();
+        for _ in 0..(self.capacity as usize - self.entries.len()) {
+            data.write_all(bytes_of(&empty))?;
+        }
+
+        Ok(data)
     }
 
-    // Pad with empty entries
-    let empty = Index::default();
-    for _ in 0..(table.capacity as usize - table.entries.len()) {
-        data.write_all(bytes_of(&empty))?;
+    pub fn deserialize(data: &[u8]) -> Result<(Self, Option<NonZeroU64>), Error> {
+        let mut data = Cursor::new(data);
+
+        // Read the header
+        let mut header = Header::default();
+        data.read_exact(bytes_of_mut(&mut header))?;
+
+        // Read entries
+        let mut entries = vec![Index::default(); header.valid() as usize];
+        data.read_exact(cast_slice_mut(&mut entries))?;
+
+        let table = Self {
+            offset: header.offset(),
+            capacity: header.capacity(),
+            entries,
+        };
+        Ok((table, header.next()))
     }
-
-    Ok(data)
-}
-
-pub fn deserialize_table(data: &[u8]) -> Result<(Table, Option<NonZeroU64>), Error> {
-    let mut data = Cursor::new(data);
-
-    // Read the header
-    let mut header = Header::default();
-    data.read_exact(bytes_of_mut(&mut header))?;
-
-    // Read entries
-    let mut entries = vec![Index::default(); header.valid() as usize];
-    data.read_exact(cast_slice_mut(&mut entries))?;
-
-    let table = Table {
-        location: 0,
-        offset: header.offset(),
-        capacity: header.capacity(),
-        entries,
-    };
-    Ok((table, header.next()))
 }
