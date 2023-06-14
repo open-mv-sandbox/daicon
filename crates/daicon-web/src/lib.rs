@@ -67,15 +67,15 @@ impl FetchFile {
                 // Report back invalid operation
                 let response = file::WriteResponse {
                     id: message.id,
-                    result: Err(file::Error::ActionNotSupported),
+                    result: Err(file::Error::NotSupported),
                 };
                 action.on_result.send(ctx, response);
             }
-            file::Action::Append(action) => {
+            file::Action::Insert(action) => {
                 // Report back invalid operation
-                let response = file::AppendResponse {
+                let response = file::InsertResponse {
                     id: message.id,
-                    result: Err(file::Error::ActionNotSupported),
+                    result: Err(file::Error::NotSupported),
                 };
                 action.on_result.send(ctx, response);
             }

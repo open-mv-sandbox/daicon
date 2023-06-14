@@ -72,7 +72,7 @@ impl Actor for SystemFile {
                     };
                     action.on_result.send(ctx, result);
                 }
-                file::Action::Append(action) => {
+                file::Action::Insert(action) => {
                     // Seek to given location
                     self.file.seek(SeekFrom::End(0))?;
                     let offset = self.file.stream_position()?;
@@ -81,7 +81,7 @@ impl Actor for SystemFile {
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = file::AppendResponse {
+                    let result = file::InsertResponse {
                         id: message.id,
                         result: Ok(offset),
                     };

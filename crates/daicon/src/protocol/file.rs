@@ -18,8 +18,8 @@ pub enum Action {
     Read(ReadAction),
     /// Write a section of data.
     Write(WriteAction),
-    /// Append data to the end of the file.
-    Append(AppendAction),
+    /// Insert data into a free region of the file, potentially appending.
+    Insert(InsertAction),
 }
 
 /// Read a section of data.
@@ -56,14 +56,14 @@ pub struct WriteResponse {
     pub result: Result<(), Error>,
 }
 
-/// Append data to the end of the file.
-pub struct AppendAction {
+/// Insert data into a free region of the file, potentially appending.
+pub struct InsertAction {
     pub data: Vec<u8>,
-    pub on_result: Sender<AppendResponse>,
+    pub on_result: Sender<InsertResponse>,
 }
 
-/// Result of `AppendAction`.
-pub struct AppendResponse {
+/// Result of `InsertAction`.
+pub struct InsertResponse {
     /// Identifier of originating message.
     pub id: Uuid,
     /// Result of the write action, containing the offset written to.
@@ -72,8 +72,10 @@ pub struct AppendResponse {
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("action not supported by the file")]
-    ActionNotSupported,
+    #[error("action not supported on file")]
+    NotSupported,
+    #[error("out of space to insert data")]
+    OutOfSpace,
     #[error("internal error")]
     InternalError { error: String },
 }

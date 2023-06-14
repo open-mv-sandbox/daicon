@@ -66,7 +66,7 @@ struct PendingSet {
 enum ImplMessage {
     Message(source::Message),
     GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(file::AppendResponse),
+    SetWriteDataResult(file::InsertResponse),
 }
 
 impl Actor for Service {
@@ -197,7 +197,7 @@ impl Service {
     fn on_set_write_data_result(
         &mut self,
         ctx: &mut Context,
-        result: file::AppendResponse,
+        result: file::InsertResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
 
@@ -266,13 +266,13 @@ impl Service {
     }
 
     fn send_write_data(&self, ctx: &mut Context, id: Uuid, data: Vec<u8>) {
-        let action = file::AppendAction {
+        let action = file::InsertAction {
             data,
             on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
         };
         let message = file::Message {
             id,
-            action: file::Action::Append(action),
+            action: file::Action::Insert(action),
         };
         self.file.send(ctx, message);
     }
