@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use anyhow::Error;
+use anyhow::{Context as _, Error};
 use daicon::{
     open_file_source,
     protocol::source::{self, Id},
@@ -10,6 +10,8 @@ use daicon_web::open_fetch_file;
 use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, Level};
 use uuid::Uuid;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlElement;
 
 fn main() {
     tracing_wasm::set_as_global_default();
@@ -74,9 +76,31 @@ impl Actor for ExampleService {
         while let Some(message) = state.next() {
             event!(Level::INFO, "received result");
 
+            // Decode the data as a text file
             let data = message.result?;
             let text = std::str::from_utf8(&data)?;
-            event!(Level::INFO, "text data:\n{}", text)
+
+            // Log what we've received
+            event!(Level::INFO, "text data:\n{}", text);
+
+            // Add it to the list
+            let document = web_sys::window()
+                .context("failed to get window")?
+                .document()
+                .context("failed to get document")?;
+
+            let list = document
+                .get_element_by_id("output")
+                .context("failed to find output")?;
+            let list: HtmlElement = list.dyn_into().ok().context("incorrect element")?;
+
+            let text = format!("==== Get Request {} ====\n\n{}\n\n", message.id, text);
+            let node = document
+                .create_element("pre")
+                .ok()
+                .context("failed to create node")?;
+            node.set_text_content(Some(&text));
+            list.append_child(&node).ok().context("failed to append")?;
         }
 
         Ok(())

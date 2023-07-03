@@ -41,7 +41,6 @@ pub struct WriteAction {
     /// If given, the offset to write to.
     ///
     /// If `Some`, the region must be already a valid region of the file.
-    /// TODO: Not yet checked on implementations.
     ///
     /// If `None`, the implementation will allocate a free region of the file.
     /// This can append, or find an implementation-specific free region.

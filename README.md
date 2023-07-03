@@ -1,18 +1,45 @@
 # Daicon
 
-Index regions of a binary blob by ID.
+Daicon is a binary header format, that indexes regions of a binary blob by 32-bit IDs.
 
-[Read the daicon format documentation here!](docs/index.md)
+[Read the daicon format specification here!](docs/specification.md)
 
-## Status
+## Why Daicon
 
-Daicon is currently a draft specification, changes will use [Semantic Versioning 2.0.0](https://semver.org/).
-You can use daicon in your projects, but no guarantees about cross-compatibility exist until a 1.0 release of the
-specification, besides an informal recommendation that 0.x minor versions stay compatible.
+Daicon is designed to be written to and read from atomically across caches, such as CDNs.
+Direct indexing before compression allows you to fetch just the data you need using HTTP range
+requests, all at once!
+This lets you use existing well supported CDN infrastructure to serve just the data you need
+efficiently.
 
-## Who is using Daicon?
+Some example uses of daicon include:
 
-- [Dacti Objects and Packages](https://github.com/open-mv-sandbox/dacti)
+- Packaging and delivering large content databases from CDNs.
+- Creating extendable file formats, by adding components identified by their ID.
+
+## Platform Support
+
+The daicon library can (WIP, see below) run on any system that has a C compiler.
+Part of what makes this possible is the highly flexible async runtime "stewart" that the library is
+built on.
+Interaction with platforms is implemented through the `file` message protocol.
+
+### WASM/Browser
+
+`daicon-web` implements a `file` protocol based on browser JS `fetch`.
+This currently uses `wasm-bindgen`, and in the future will support WASM Component Model.
+
+### Transpilation for 'C/C++ only' Platforms
+
+*This is a work in progress, and not yet available.
+If you want to work on this yourself feel free to open issues for blockers.*
+
+Some platforms require a publisher to provide and build their code in C/C++ exclusively.
+Regardless of the merits of this, this is a requirement for daicon to truly be universally useful
+for games.
+
+To support this, daicon can be transpiled to C/C++ using WebAssembly as an intermediate, using
+`wasm2c` from the WebAssembly Binary Toolkit.
 
 ## Crates
 

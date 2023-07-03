@@ -33,5 +33,9 @@ features = [
 getrandom = { workspace = true, features = ["js"] }
 
 [dev-dependencies]
-tracing-wasm = "0.2.1"
+tracing-wasm.workspace = true
 daicon-types.workspace = true
+
+[dev-dependencies.web-sys]
+workspace = true
+features = ["Document", "Element", "HtmlElement"]

@@ -65,6 +65,8 @@ impl Actor for SystemFile {
                     action.on_result.handle(world, result);
                 }
                 file::Action::Write(action) => {
+                    // TODO: Check write region is valid if offset is Some.
+
                     // Seek to given location
                     let seek_from = match action.offset {
                         Some(offset) => SeekFrom::Start(offset),

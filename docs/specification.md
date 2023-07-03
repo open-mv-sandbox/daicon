@@ -1,8 +1,5 @@
 # Daicon - Specification
 
-This is a technical specification of daicon.
-If you want a high-level explanation and primer instead, read the explainer document.
-
 ## Overview
 
 | Bytes | Description |
