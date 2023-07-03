@@ -69,7 +69,7 @@ struct PendingSet {
 enum ImplMessage {
     Message(source::Message),
     GetIndexResult((Uuid, u64, u32)),
-    SetWriteDataResult(file::InsertResponse),
+    SetWriteDataResult(file::WriteResponse),
 }
 
 impl Actor for Service {
@@ -205,19 +205,19 @@ impl Service {
     fn on_set_write_data_result(
         &mut self,
         world: &mut World,
-        result: file::InsertResponse,
+        response: file::WriteResponse,
     ) -> Result<(), Error> {
-        event!(Level::DEBUG, id = ?result.id, "received data write result");
+        event!(Level::DEBUG, id = ?response.id, "received data write result");
 
         // Remove the task, we're done with it in this actor
         let task = self
             .set_tasks
-            .remove(&result.id)
+            .remove(&response.id)
             .context("failed to get pending set task")?;
 
         // Write the index
-        let offset = result.result?;
-        self.send_write_index(world, result.id, task, offset);
+        let offset = response.result?;
+        self.send_write_index(world, response.id, task, offset);
 
         Ok(())
     }
@@ -274,13 +274,14 @@ impl Service {
     }
 
     fn send_write_data(&self, world: &mut World, id: Uuid, data: Vec<u8>) {
-        let action = file::InsertAction {
+        let action = file::WriteAction {
+            offset: None,
             data,
             on_result: self.handler.clone().map(ImplMessage::SetWriteDataResult),
         };
         let message = file::Message {
             id,
-            action: file::Action::Insert(action),
+            action: file::Action::Write(action),
         };
         self.file.handle(world, message);
     }

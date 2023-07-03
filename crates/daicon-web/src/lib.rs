@@ -78,14 +78,6 @@ impl FetchFile {
                 };
                 action.on_result.handle(world, response);
             }
-            file::Action::Insert(action) => {
-                // Report back invalid operation
-                let response = file::InsertResponse {
-                    id: message.id,
-                    result: Err(file::Error::NotSupported),
-                };
-                action.on_result.handle(world, response);
-            }
         }
     }
 

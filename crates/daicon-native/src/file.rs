@@ -66,28 +66,18 @@ impl Actor for SystemFile {
                 }
                 file::Action::Write(action) => {
                     // Seek to given location
-                    self.file.seek(SeekFrom::Start(action.offset))?;
-
-                    // Perform the write
-                    self.file.write_all(&action.data)?;
-
-                    // Reply result
-                    let result = file::WriteResponse {
-                        id: message.id,
-                        result: Ok(()),
+                    let seek_from = match action.offset {
+                        Some(offset) => SeekFrom::Start(offset),
+                        None => SeekFrom::End(0),
                     };
-                    action.on_result.handle(world, result);
-                }
-                file::Action::Insert(action) => {
-                    // Seek to given location
-                    self.file.seek(SeekFrom::End(0))?;
+                    self.file.seek(seek_from)?;
                     let offset = self.file.stream_position()?;
 
                     // Perform the write
                     self.file.write_all(&action.data)?;
 
                     // Reply result
-                    let result = file::InsertResponse {
+                    let result = file::WriteResponse {
                         id: message.id,
                         result: Ok(offset),
                     };

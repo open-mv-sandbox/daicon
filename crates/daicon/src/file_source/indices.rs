@@ -262,7 +262,7 @@ fn write_table(
 
     // Send to file for writing
     let action = file::WriteAction {
-        offset,
+        offset: Some(offset),
         data,
         on_result: Handler::noop(),
     };
