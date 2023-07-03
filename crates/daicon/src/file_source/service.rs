@@ -28,7 +28,7 @@ pub fn open_file_source(
     let (cx, id) = world.create(cx, "daicon-file-source")?;
     let handler = Handler::to(id);
 
-    // TODO: Doesn't need to be a separate actor, just make it a type
+    // Handled as its own actor, as it needs to do async processing
     let indices = indices::start(world, &cx, file.clone(), options)?;
 
     // Start the root manager actor
