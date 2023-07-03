@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use anyhow::{Context as _, Error};
 use daicon::protocol::file;
 use js_sys::{ArrayBuffer, Uint8Array};
-use stewart::{Actor, Context, Schedule, Sender, State, World};
+use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
@@ -12,27 +12,29 @@ use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
 #[instrument("daicon-web::open_fetch_file", skip_all)]
 pub fn open_fetch_file(
-    ctx: &mut Context,
+    world: &mut World,
+    cx: &Context,
     url: String,
     hnd: WorldHandle,
-) -> Result<Sender<file::Message>, Error> {
-    let (mut ctx, sender) = ctx.create("daicon-fetch-file")?;
+) -> Result<Handler<file::Message>, Error> {
+    let (_cx, id) = world.create(cx, "daicon-fetch-file")?;
+    let handler = Handler::to(id);
 
     let actor = FetchFile {
         hnd,
-        sender: sender.clone(),
+        handler: handler.clone(),
         url,
 
         pending: HashMap::new(),
     };
-    ctx.start(actor)?;
+    world.start(id, actor)?;
 
-    Ok(sender.map(MessageImpl::Message))
+    Ok(handler.map(MessageImpl::Message))
 }
 
 struct FetchFile {
     hnd: WorldHandle,
-    sender: Sender<MessageImpl>,
+    handler: Handler<MessageImpl>,
     url: String,
 
     pending: HashMap<Uuid, file::ReadAction>,
@@ -41,14 +43,19 @@ struct FetchFile {
 impl Actor for FetchFile {
     type Message = MessageImpl;
 
-    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        world: &mut World,
+        _cx: &Context,
+        state: &mut State<Self>,
+    ) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 MessageImpl::Message(message) => {
-                    self.on_message(ctx, message);
+                    self.on_message(world, message);
                 }
                 MessageImpl::FetchResult { id, data } => {
-                    self.on_fetch_result(ctx, id, data)?;
+                    self.on_fetch_result(world, id, data)?;
                 }
             }
         }
@@ -58,7 +65,7 @@ impl Actor for FetchFile {
 }
 
 impl FetchFile {
-    fn on_message(&mut self, ctx: &mut Context, message: file::Message) {
+    fn on_message(&mut self, world: &mut World, message: file::Message) {
         match message.action {
             file::Action::Read(action) => {
                 self.on_read(message.id, action);
@@ -69,7 +76,7 @@ impl FetchFile {
                     id: message.id,
                     result: Err(file::Error::NotSupported),
                 };
-                action.on_result.send(ctx, response);
+                action.on_result.handle(world, response);
             }
             file::Action::Insert(action) => {
                 // Report back invalid operation
@@ -77,7 +84,7 @@ impl FetchFile {
                     id: message.id,
                     result: Err(file::Error::NotSupported),
                 };
-                action.on_result.send(ctx, response);
+                action.on_result.handle(world, response);
             }
         }
     }
@@ -91,14 +98,14 @@ impl FetchFile {
         // TODO: Batch fetches, we can do multiple range requests at once
         spawn_local(do_fetch(
             self.hnd.clone(),
-            self.sender.clone(),
+            self.handler.clone(),
             id,
             self.url.clone(),
             range,
         ));
     }
 
-    fn on_fetch_result(&mut self, ctx: &mut Context, id: Uuid, data: Vec<u8>) -> Result<(), Error> {
+    fn on_fetch_result(&mut self, world: &mut World, id: Uuid, data: Vec<u8>) -> Result<(), Error> {
         event!(Level::INFO, "received fetch result");
 
         // TODO: Validate the actual result, we may not have gotten what we asked for, for example
@@ -110,7 +117,7 @@ impl FetchFile {
             id,
             result: Ok(data),
         };
-        pending.on_result.send(ctx, message);
+        pending.on_result.handle(world, message);
 
         Ok(())
     }
@@ -123,7 +130,7 @@ enum MessageImpl {
 
 async fn do_fetch(
     hnd: WorldHandle,
-    sender: Sender<MessageImpl>,
+    handler: Handler<MessageImpl>,
     id: Uuid,
     url: String,
     range: Range<u64>,
@@ -158,11 +165,10 @@ async fn do_fetch(
 
     // Send the data back
     let mut world = hnd.borrow_mut();
-    let mut schedule = Schedule::default();
-    let mut ctx = Context::root(&mut world, &mut schedule);
+    handler.handle(&mut world, MessageImpl::FetchResult { id, data });
 
-    sender.send(&mut ctx, MessageImpl::FetchResult { id, data });
-    schedule.run_until_idle(&mut world).unwrap();
+    let cx = Context::default();
+    world.run_until_idle(&cx).unwrap();
 }
 
 /// TODO: Replace this with a more thought out executor abstraction.

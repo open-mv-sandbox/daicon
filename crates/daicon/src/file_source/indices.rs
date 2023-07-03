@@ -2,7 +2,7 @@ use std::{collections::HashMap, mem::size_of};
 
 use anyhow::{Context as _, Error};
 use daicon_types::{Header, Id, Index};
-use stewart::{Actor, Context, Sender, State};
+use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -10,13 +10,15 @@ use crate::{file_source::table::Table, protocol::file, FileSourceOptions};
 
 #[instrument("daicon::start_indices", skip_all)]
 pub fn start(
-    ctx: &mut Context,
-    file: Sender<file::Message>,
+    world: &mut World,
+    cx: &Context,
+    file: Handler<file::Message>,
     options: FileSourceOptions,
-) -> Result<Sender<Message>, Error> {
+) -> Result<Handler<Message>, Error> {
     event!(Level::DEBUG, "starting");
 
-    let (mut ctx, sender) = ctx.create("daicon-file-indices")?;
+    let (_cx, id) = world.create(cx, "daicon-file-indices")?;
+    let handler = Handler::to(id);
 
     let mut tables = Vec::new();
     let mut pending_read = None;
@@ -26,13 +28,13 @@ pub fn start(
     if let Some(offset) = options.open_table {
         // Start opening by reading the first table
         pending_read = Some(offset);
-        read_table(&mut ctx, &file, sender.clone(), offset)?;
+        read_table(world, &file, handler.clone(), offset)?;
     } else {
         // Write a table immediately at the given offset
 
         // TODO: Append to the end of the file, then store the offset.
         let table = Table::new(options.allocate_capacity);
-        write_table(&mut ctx, &file, &table, 0)?;
+        write_table(world, &file, &table, 0)?;
 
         // Track the table we just wrote
         tables.push(table);
@@ -40,7 +42,7 @@ pub fn start(
 
     // Start the actor
     let actor = Service {
-        sender: sender.clone(),
+        sender: handler.clone(),
         file,
 
         tables: Vec::new(),
@@ -49,9 +51,9 @@ pub fn start(
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
-    ctx.start(actor)?;
+    world.start(id, actor)?;
 
-    Ok(sender.map(ImplMessage::Message))
+    Ok(handler.map(ImplMessage::Message))
 }
 
 pub struct Message {
@@ -66,19 +68,19 @@ pub enum Action {
 
 pub struct GetAction {
     pub id: Id,
-    pub on_result: Sender<(Uuid, u64, u32)>,
+    pub on_result: Handler<(Uuid, u64, u32)>,
 }
 
 pub struct SetAction {
     pub id: Id,
     pub offset: u64,
     pub size: u32,
-    pub on_result: Sender<Uuid>,
+    pub on_result: Handler<Uuid>,
 }
 
 struct Service {
-    sender: Sender<ImplMessage>,
-    file: Sender<file::Message>,
+    sender: Handler<ImplMessage>,
+    file: Handler<file::Message>,
 
     tables: Vec<(u64, Table)>,
 
@@ -93,15 +95,20 @@ struct Service {
 impl Actor for Service {
     type Message = ImplMessage;
 
-    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        world: &mut World,
+        _cx: &Context,
+        state: &mut State<Self>,
+    ) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 ImplMessage::Message(message) => self.on_message(message),
-                ImplMessage::ReadResult(message) => self.on_read_result(ctx, message)?,
+                ImplMessage::ReadResult(message) => self.on_read_result(world, message)?,
             }
         }
 
-        self.update_tasks(ctx);
+        self.update_tasks(world);
 
         Ok(())
     }
@@ -123,7 +130,7 @@ impl Service {
 
     fn on_read_result(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         message: file::ReadResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
@@ -142,7 +149,7 @@ impl Service {
         // If we have a next table, queue it up for the next read
         if let Some(value) = next {
             let offset = value.get();
-            read_table(ctx, &self.file, self.sender.clone(), offset)?;
+            read_table(world, &self.file, self.sender.clone(), offset)?;
             self.pending_read = Some(offset);
         }
 
@@ -152,18 +159,18 @@ impl Service {
         Ok(())
     }
 
-    fn update_tasks(&mut self, ctx: &mut Context) {
+    fn update_tasks(&mut self, world: &mut World) {
         // Resolve gets we can resolve
         self.get_tasks
-            .retain(|id, action| update_get(ctx, &self.tables, *id, action));
+            .retain(|id, action| update_get(world, &self.tables, *id, action));
 
         // Resolve sets we can resolve
         self.set_tasks
-            .retain(|id, action| update_set(ctx, &self.file, &mut self.tables, *id, action));
+            .retain(|id, action| update_set(world, &self.file, &mut self.tables, *id, action));
     }
 }
 
-fn update_get(ctx: &mut Context, tables: &[(u64, Table)], id: Uuid, action: &GetAction) -> bool {
+fn update_get(world: &mut World, tables: &[(u64, Table)], id: Uuid, action: &GetAction) -> bool {
     let (offset, size) = if let Some(value) = find_in(tables, action.id) {
         value
     } else {
@@ -171,14 +178,14 @@ fn update_get(ctx: &mut Context, tables: &[(u64, Table)], id: Uuid, action: &Get
     };
 
     event!(Level::DEBUG, id = ?action.id, "found entry");
-    action.on_result.send(ctx, (id, offset, size));
+    action.on_result.handle(world, (id, offset, size));
 
     false
 }
 
 fn update_set(
-    ctx: &mut Context,
-    file: &Sender<file::Message>,
+    world: &mut World,
+    file: &Handler<file::Message>,
     tables: &mut [(u64, Table)],
     id: Uuid,
     action: &SetAction,
@@ -203,11 +210,11 @@ fn update_set(
     }
 
     // Flush write the table
-    write_table(ctx, file, table, *offset).unwrap();
+    write_table(world, file, table, *offset).unwrap();
 
     // Report success
     // TODO: Wait for write to report back
-    action.on_result.send(ctx, id);
+    action.on_result.handle(world, id);
 
     false
 }
@@ -222,9 +229,9 @@ enum ImplMessage {
 }
 
 fn read_table(
-    ctx: &mut Context,
-    file: &Sender<file::Message>,
-    sender: Sender<ImplMessage>,
+    world: &mut World,
+    file: &Handler<file::Message>,
+    sender: Handler<ImplMessage>,
     offset: u64,
 ) -> Result<(), Error> {
     // Estimate the size of the table, so we can hopefully prefetch all of it
@@ -240,14 +247,14 @@ fn read_table(
         id: Uuid::new_v4(),
         action: file::Action::Read(action),
     };
-    file.send(ctx, message);
+    file.handle(world, message);
 
     Ok(())
 }
 
 fn write_table(
-    ctx: &mut Context,
-    file: &Sender<file::Message>,
+    world: &mut World,
+    file: &Handler<file::Message>,
     table: &Table,
     offset: u64,
 ) -> Result<(), Error> {
@@ -257,13 +264,13 @@ fn write_table(
     let action = file::WriteAction {
         offset,
         data,
-        on_result: Sender::noop(),
+        on_result: Handler::noop(),
     };
     let message = file::Message {
         id: Uuid::new_v4(),
         action: file::Action::Write(action),
     };
-    file.send(ctx, message);
+    file.handle(world, message);
 
     Ok(())
 }

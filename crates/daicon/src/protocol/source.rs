@@ -1,4 +1,4 @@
-use stewart::Sender;
+use stewart::Handler;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -28,7 +28,7 @@ pub enum Action {
 /// Get the data associated with an ID.
 pub struct GetAction {
     pub id: Id,
-    pub on_result: Sender<GetResponse>,
+    pub on_result: Handler<GetResponse>,
 }
 
 pub struct GetResponse {
@@ -40,7 +40,7 @@ pub struct GetResponse {
 pub struct SetAction {
     pub id: Id,
     pub data: Vec<u8>,
-    pub on_result: Sender<SetResponse>,
+    pub on_result: Handler<SetResponse>,
 }
 
 pub struct SetResponse {
@@ -50,7 +50,7 @@ pub struct SetResponse {
 
 /// Get a list of all indices in the source.
 pub struct ListAction {
-    pub on_result: Sender<ListResponse>,
+    pub on_result: Handler<ListResponse>,
 }
 
 pub struct ListResponse {

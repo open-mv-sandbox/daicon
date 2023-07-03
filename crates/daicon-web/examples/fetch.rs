@@ -7,7 +7,7 @@ use daicon::{
     FileSourceOptions,
 };
 use daicon_web::open_fetch_file;
-use stewart::{Actor, Context, Schedule, State, World};
+use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, Level};
 use uuid::Uuid;
 
@@ -16,48 +16,48 @@ fn main() {
 
     event!(Level::INFO, "initializing world...");
     let world = World::default();
-    let mut schedule = Schedule::default();
     let hnd = Rc::new(RefCell::new(world));
 
     let mut world = hnd.borrow_mut();
-    let mut ctx = Context::root(&mut world, &mut schedule);
+    let cx = Context::default();
 
-    let (mut ctx, sender) = ctx.create("fetch-example").unwrap();
+    let (cx, id) = world.create(&cx, "fetch-example").unwrap();
+    let handler = Handler::to(id);
 
     event!(Level::INFO, "initializing fetch service...");
     let url = "http://localhost:8080/package.example";
-    let file = open_fetch_file(&mut ctx, url.to_string(), hnd.clone()).unwrap();
+    let file = open_fetch_file(&mut world, &cx, url.to_string(), hnd.clone()).unwrap();
 
     event!(Level::INFO, "initializing daicon service...");
     let options = FileSourceOptions::default().open_table(0);
-    let source = open_file_source(&mut ctx, file, options).unwrap();
+    let source = open_file_source(&mut world, &cx, file, options).unwrap();
 
     event!(Level::INFO, "starting example service...");
-    ctx.start(ExampleService).unwrap();
+    world.start(id, ExampleService).unwrap();
 
     event!(Level::INFO, "dispatching requests...");
     let action = source::GetAction {
         id: Id(0xbacc2ba1),
-        on_result: sender.clone(),
+        on_result: handler.clone(),
     };
     let message = source::Message {
         id: Uuid::new_v4(),
         action: source::Action::Get(action),
     };
-    source.send(&mut ctx, message);
+    source.handle(&mut world, message);
 
     let action = source::GetAction {
         id: Id(0x1f063ad4),
-        on_result: sender,
+        on_result: handler,
     };
     let message = source::Message {
         id: Uuid::new_v4(),
         action: source::Action::Get(action),
     };
-    source.send(&mut ctx, message);
+    source.handle(&mut world, message);
 
     // Process everything
-    schedule.run_until_idle(&mut world).unwrap();
+    world.run_until_idle(&cx).unwrap();
 }
 
 struct ExampleService;
@@ -65,7 +65,12 @@ struct ExampleService;
 impl Actor for ExampleService {
     type Message = source::GetResponse;
 
-    fn process(&mut self, _ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        _world: &mut World,
+        _cx: &Context,
+        state: &mut State<Self>,
+    ) -> Result<(), Error> {
         while let Some(message) = state.next() {
             event!(Level::INFO, "received result");
 

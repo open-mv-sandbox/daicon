@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use anyhow::{Context as _, Error};
 use daicon_types::Id;
-use stewart::{Actor, Context, Sender, State};
+use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -18,35 +18,38 @@ use crate::{
 /// If `open_table` is not specified, the source will append a new table when required.
 #[instrument("daicon::open_file_source", skip_all)]
 pub fn open_file_source(
-    ctx: &mut Context,
-    file: Sender<file::Message>,
+    world: &mut World,
+    cx: &Context,
+    file: Handler<file::Message>,
     options: FileSourceOptions,
-) -> Result<Sender<source::Message>, Error> {
+) -> Result<Handler<source::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (mut ctx, sender) = ctx.create("daicon-file-source")?;
+    let (cx, id) = world.create(cx, "daicon-file-source")?;
+    let handler = Handler::to(id);
 
-    let indices = indices::start(&mut ctx, file.clone(), options)?;
+    // TODO: Doesn't need to be a separate actor, just make it a type
+    let indices = indices::start(world, &cx, file.clone(), options)?;
 
     // Start the root manager actor
     let actor = Service {
-        sender: sender.clone(),
+        handler: handler.clone(),
         file,
         indices,
 
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
     };
-    ctx.start(actor)?;
+    world.start(id, actor)?;
 
-    let sender = sender.map(ImplMessage::Message);
+    let sender = handler.map(ImplMessage::Message);
     Ok(sender)
 }
 
 struct Service {
-    sender: Sender<ImplMessage>,
-    file: Sender<file::Message>,
-    indices: Sender<indices::Message>,
+    handler: Handler<ImplMessage>,
+    file: Handler<file::Message>,
+    indices: Handler<indices::Message>,
 
     // Ongoing tracked actions
     get_tasks: HashMap<Uuid, PendingGet>,
@@ -54,13 +57,13 @@ struct Service {
 }
 
 struct PendingGet {
-    on_result: Sender<source::GetResponse>,
+    on_result: Handler<source::GetResponse>,
 }
 
 struct PendingSet {
     id: Id,
     size: u32,
-    on_result: Sender<source::SetResponse>,
+    on_result: Handler<source::SetResponse>,
 }
 
 enum ImplMessage {
@@ -72,17 +75,22 @@ enum ImplMessage {
 impl Actor for Service {
     type Message = ImplMessage;
 
-    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        world: &mut World,
+        _cx: &Context,
+        state: &mut State<Self>,
+    ) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message {
                 ImplMessage::Message(message) => {
-                    self.on_message(ctx, message)?;
+                    self.on_message(world, message)?;
                 }
                 ImplMessage::GetIndexResult((action_id, offset, size)) => {
-                    self.on_get_index_result(ctx, action_id, offset, size)?;
+                    self.on_get_index_result(world, action_id, offset, size)?;
                 }
                 ImplMessage::SetWriteDataResult(result) => {
-                    self.on_set_write_data_result(ctx, result)?;
+                    self.on_set_write_data_result(world, result)?;
                 }
             }
         }
@@ -92,16 +100,16 @@ impl Actor for Service {
 }
 
 impl Service {
-    fn on_message(&mut self, ctx: &mut Context, message: source::Message) -> Result<(), Error> {
+    fn on_message(&mut self, world: &mut World, message: source::Message) -> Result<(), Error> {
         match message.action {
             source::Action::Get(action) => {
-                self.on_get(ctx, message.id, action)?;
+                self.on_get(world, message.id, action)?;
             }
             source::Action::Set(action) => {
-                self.on_set(ctx, message.id, action)?;
+                self.on_set(world, message.id, action)?;
             }
             source::Action::List(action) => {
-                self.on_list(ctx, message.id, action)?;
+                self.on_list(world, message.id, action)?;
             }
         }
 
@@ -110,7 +118,7 @@ impl Service {
 
     fn on_get(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         id: Uuid,
         action: source::GetAction,
     ) -> Result<(), Error> {
@@ -123,14 +131,14 @@ impl Service {
         self.get_tasks.insert(id, task);
 
         // Fetch the entry
-        self.send_read_index(ctx, id, action.id);
+        self.send_read_index(world, id, action.id);
 
         Ok(())
     }
 
     fn on_set(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         id: Uuid,
         action: source::SetAction,
     ) -> Result<(), Error> {
@@ -150,14 +158,14 @@ impl Service {
         self.set_tasks.insert(id, task);
 
         // Append the data to the file
-        self.send_write_data(ctx, id, action.data);
+        self.send_write_data(world, id, action.data);
 
         Ok(())
     }
 
     fn on_list(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         id: Uuid,
         action: source::ListAction,
     ) -> Result<(), Error> {
@@ -169,13 +177,13 @@ impl Service {
             id,
             result: Err(error),
         };
-        action.on_result.send(ctx, response);
+        action.on_result.handle(world, response);
         Ok(())
     }
 
     fn on_get_index_result(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         id: Uuid,
         offset: u64,
         size: u32,
@@ -189,14 +197,14 @@ impl Service {
             .context("failed to find get task")?;
 
         // We've got the location of the data, so perform the read
-        self.send_read_data(ctx, id, offset, size, task.on_result);
+        self.send_read_data(world, id, offset, size, task.on_result);
 
         Ok(())
     }
 
     fn on_set_write_data_result(
         &mut self,
-        ctx: &mut Context,
+        world: &mut World,
         result: file::InsertResponse,
     ) -> Result<(), Error> {
         event!(Level::DEBUG, id = ?result.id, "received data write result");
@@ -209,22 +217,22 @@ impl Service {
 
         // Write the index
         let offset = result.result?;
-        self.send_write_index(ctx, result.id, task, offset);
+        self.send_write_index(world, result.id, task, offset);
 
         Ok(())
     }
 
-    fn send_read_index(&self, ctx: &mut Context, action_id: Uuid, id: Id) {
-        let on_result = self.sender.clone().map(ImplMessage::GetIndexResult);
+    fn send_read_index(&self, world: &mut World, action_id: Uuid, id: Id) {
+        let on_result = self.handler.clone().map(ImplMessage::GetIndexResult);
         let action = GetAction { id, on_result };
         let message = indices::Message {
             id: action_id,
             action: Action::Get(action),
         };
-        self.indices.send(ctx, message);
+        self.indices.handle(world, message);
     }
 
-    fn send_write_index(&self, ctx: &mut Context, id: Uuid, task: PendingSet, offset: u64) {
+    fn send_write_index(&self, world: &mut World, id: Uuid, task: PendingSet, offset: u64) {
         let action = SetAction {
             id: task.id,
             offset,
@@ -237,16 +245,16 @@ impl Service {
             id,
             action: Action::Set(action),
         };
-        self.indices.send(ctx, message);
+        self.indices.handle(world, message);
     }
 
     fn send_read_data(
         &self,
-        ctx: &mut Context,
+        world: &mut World,
         id: Uuid,
         offset: u64,
         size: u32,
-        on_result: Sender<source::GetResponse>,
+        on_result: Handler<source::GetResponse>,
     ) {
         let action = file::ReadAction {
             offset,
@@ -262,18 +270,18 @@ impl Service {
             id,
             action: file::Action::Read(action),
         };
-        self.file.send(ctx, message);
+        self.file.handle(world, message);
     }
 
-    fn send_write_data(&self, ctx: &mut Context, id: Uuid, data: Vec<u8>) {
+    fn send_write_data(&self, world: &mut World, id: Uuid, data: Vec<u8>) {
         let action = file::InsertAction {
             data,
-            on_result: self.sender.clone().map(ImplMessage::SetWriteDataResult),
+            on_result: self.handler.clone().map(ImplMessage::SetWriteDataResult),
         };
         let message = file::Message {
             id,
             action: file::Action::Insert(action),
         };
-        self.file.send(ctx, message);
+        self.file.handle(world, message);
     }
 }

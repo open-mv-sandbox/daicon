@@ -5,18 +5,19 @@ use std::{
 
 use anyhow::{Context as _, Error};
 use daicon::protocol::file;
-use stewart::{Actor, Context, Sender, State};
+use stewart::{Actor, Context, Handler, State, World};
 use tracing::{event, instrument, Level};
 
 #[instrument("daicon-native::open_system_file", skip_all)]
 pub fn open_system_file(
-    ctx: &mut Context,
+    world: &mut World,
+    cx: &Context,
     path: String,
     truncate: bool,
-) -> Result<Sender<file::Message>, Error> {
+) -> Result<Handler<file::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (mut ctx, sender) = ctx.create("daicon-system-file")?;
+    let (_cx, id) = world.create(cx, "daicon-system-file")?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -27,9 +28,9 @@ pub fn open_system_file(
         .context("failed to open system file for writing")?;
 
     let actor = SystemFile { file };
-    ctx.start(actor)?;
+    world.start(id, actor)?;
 
-    Ok(sender)
+    Ok(Handler::to(id))
 }
 
 struct SystemFile {
@@ -39,7 +40,12 @@ struct SystemFile {
 impl Actor for SystemFile {
     type Message = file::Message;
 
-    fn process(&mut self, ctx: &mut Context, state: &mut State<Self>) -> Result<(), Error> {
+    fn process(
+        &mut self,
+        world: &mut World,
+        _cx: &Context,
+        state: &mut State<Self>,
+    ) -> Result<(), Error> {
         while let Some(message) = state.next() {
             match message.action {
                 file::Action::Read(action) => {
@@ -56,7 +62,7 @@ impl Actor for SystemFile {
                         id: message.id,
                         result: Ok(data),
                     };
-                    action.on_result.send(ctx, result);
+                    action.on_result.handle(world, result);
                 }
                 file::Action::Write(action) => {
                     // Seek to given location
@@ -70,7 +76,7 @@ impl Actor for SystemFile {
                         id: message.id,
                         result: Ok(()),
                     };
-                    action.on_result.send(ctx, result);
+                    action.on_result.handle(world, result);
                 }
                 file::Action::Insert(action) => {
                     // Seek to given location
@@ -85,7 +91,7 @@ impl Actor for SystemFile {
                         id: message.id,
                         result: Ok(offset),
                     };
-                    action.on_result.send(ctx, result);
+                    action.on_result.handle(world, result);
                 }
             }
         }

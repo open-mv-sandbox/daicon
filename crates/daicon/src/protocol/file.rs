@@ -1,4 +1,4 @@
-use stewart::Sender;
+use stewart::Handler;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ pub enum Action {
 pub struct ReadAction {
     pub offset: u64,
     pub size: u64,
-    pub on_result: Sender<ReadResponse>,
+    pub on_result: Handler<ReadResponse>,
 }
 
 /// Result of `ReadAction`.
@@ -45,7 +45,7 @@ pub struct ReadResponse {
 pub struct WriteAction {
     pub offset: u64,
     pub data: Vec<u8>,
-    pub on_result: Sender<WriteResponse>,
+    pub on_result: Handler<WriteResponse>,
 }
 
 /// Result of `WriteAction`.
@@ -59,7 +59,7 @@ pub struct WriteResponse {
 /// Insert data into a free region of the file, potentially appending.
 pub struct InsertAction {
     pub data: Vec<u8>,
-    pub on_result: Sender<InsertResponse>,
+    pub on_result: Handler<InsertResponse>,
 }
 
 /// Result of `InsertAction`.
