@@ -7,8 +7,8 @@ Daicon is a binary header format, that indexes regions of a binary blob by 32-bi
 ## Why Daicon
 
 Daicon is designed to be written to and read from atomically across caches, such as CDNs.
-Direct indexing before compression allows you to fetch just the data you need using HTTP range
-requests, all at once!
+Direct indexing before compression allows you to fetch just the data you need using HTTP Range
+Requests, all at once!
 This lets you use existing well supported CDN infrastructure to serve just the data you need
 efficiently.
 
@@ -40,6 +40,19 @@ for games.
 
 To support this, daicon can be transpiled to C/C++ using WebAssembly as an intermediate, using
 `wasm2c` from the WebAssembly Binary Toolkit.
+
+## Common Issues
+
+### HTTP Multipart Ranges Unsupported
+
+Some S3-compatible CDNs, including AWS and minio, **do not support** multipart ranges in HTTP
+requests.
+
+Currently, if multipart is not supported, the entire source file will be fetched at once by daicon.
+This can significantly degrade performance, or even fail entirely, if the source file is large.
+
+In the future, we may implement mitigations for this issue.
+For testing, we are using NGINX, which does support multipart ranges.
 
 ## Crates
 

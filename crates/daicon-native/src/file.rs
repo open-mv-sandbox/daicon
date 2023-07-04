@@ -5,19 +5,19 @@ use std::{
 
 use anyhow::{Context as _, Error};
 use daicon::protocol::file;
-use stewart::{Actor, Context, Handler, State, World};
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 
 #[instrument("daicon-native::open_system_file", skip_all)]
 pub fn open_system_file(
     world: &mut World,
-    cx: &Context,
+    id: Id,
     path: String,
     truncate: bool,
 ) -> Result<Handler<file::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (_cx, id) = world.create(cx, "daicon-system-file")?;
+    let id = world.create(id, "daicon-system-file")?;
 
     let file = OpenOptions::new()
         .read(true)
@@ -40,13 +40,8 @@ struct SystemFile {
 impl Actor for SystemFile {
     type Message = file::Message;
 
-    fn process(
-        &mut self,
-        world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             match message.action {
                 file::Action::Read(action) => {
                     // TODO: Currently remaining bytes after EOF are kept zero, but maybe we want to

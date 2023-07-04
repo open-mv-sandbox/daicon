@@ -2,7 +2,7 @@ use anyhow::Error;
 use clap::Args;
 use daicon::{open_file_source, protocol::source, FileSourceOptions};
 use daicon_native::open_system_file;
-use stewart::{Actor, Context, Handler, State, World};
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -25,18 +25,18 @@ pub struct Command {
 }
 
 #[instrument("daicon-tools::start_set", skip_all)]
-pub fn start(world: &mut World, cx: &Context, command: Command) -> Result<(), Error> {
+pub fn start(world: &mut World, command: Command) -> Result<(), Error> {
     event!(Level::INFO, "setting file in package");
 
     let asset_id = parse_hex(&command.id)?;
 
-    let (cx, id) = world.create(cx, "command-set")?;
+    let id = world.create(Id::none(), "command-set")?;
     let handler = Handler::to(id);
 
     // Open the target file
-    let file = open_system_file(world, &cx, command.target.clone(), false)?;
+    let file = open_system_file(world, id, command.target.clone(), false)?;
     let options = FileSourceOptions::default().open_table(0);
-    let source = open_file_source(world, &cx, file, options)?;
+    let source = open_file_source(world, id, file, options)?;
 
     // Add the data to the source
     let data = std::fs::read(&command.input)?;
@@ -63,16 +63,11 @@ impl Actor for SetCommandService {
     type Message = Message;
 
     #[instrument("SetCommandService", skip_all)]
-    fn process(
-        &mut self,
-        _world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, _world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             match message {
                 Message::Result(_) => {
-                    state.stop();
+                    cx.stop();
                 }
             }
         }

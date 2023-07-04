@@ -1,8 +1,8 @@
 use std::{collections::HashMap, mem::size_of};
 
 use anyhow::{Context as _, Error};
-use daicon_types::{Header, Id, Index};
-use stewart::{Actor, Context, Handler, State, World};
+use daicon_types::{Header, Id as FileId, Index};
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -11,13 +11,13 @@ use crate::{file_source::table::Table, protocol::file, FileSourceOptions};
 #[instrument("daicon::start_indices", skip_all)]
 pub fn start(
     world: &mut World,
-    cx: &Context,
+    id: Id,
     file: Handler<file::Message>,
     options: FileSourceOptions,
 ) -> Result<Handler<Message>, Error> {
     event!(Level::DEBUG, "starting");
 
-    let (_cx, id) = world.create(cx, "daicon-file-indices")?;
+    let id = world.create(id, "daicon-file-indices")?;
     let handler = Handler::to(id);
 
     let mut tables = Vec::new();
@@ -67,12 +67,12 @@ pub enum Action {
 }
 
 pub struct GetAction {
-    pub id: Id,
+    pub id: FileId,
     pub on_result: Handler<(Uuid, u64, u32)>,
 }
 
 pub struct SetAction {
-    pub id: Id,
+    pub id: FileId,
     pub offset: u64,
     pub size: u32,
     pub on_result: Handler<Uuid>,
@@ -95,13 +95,8 @@ struct Service {
 impl Actor for Service {
     type Message = ImplMessage;
 
-    fn process(
-        &mut self,
-        world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             match message {
                 ImplMessage::Message(message) => self.on_message(message),
                 ImplMessage::ReadResult(message) => self.on_read_result(world, message)?,
@@ -219,7 +214,7 @@ fn update_set(
     false
 }
 
-fn find_in(tables: &[(u64, Table)], id: Id) -> Option<(u64, u32)> {
+fn find_in(tables: &[(u64, Table)], id: FileId) -> Option<(u64, u32)> {
     tables.iter().find_map(|(_, table)| table.find(id))
 }
 
@@ -264,7 +259,7 @@ fn write_table(
     let action = file::WriteAction {
         offset: Some(offset),
         data,
-        on_result: Handler::noop(),
+        on_result: Handler::none(),
     };
     let message = file::Message {
         id: Uuid::new_v4(),

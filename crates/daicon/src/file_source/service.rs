@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use anyhow::{Context as _, Error};
-use daicon_types::Id;
-use stewart::{Actor, Context, Handler, State, World};
+use daicon_types::Id as FileId;
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 
@@ -19,17 +19,17 @@ use crate::{
 #[instrument("daicon::open_file_source", skip_all)]
 pub fn open_file_source(
     world: &mut World,
-    cx: &Context,
+    id: Id,
     file: Handler<file::Message>,
     options: FileSourceOptions,
 ) -> Result<Handler<source::Message>, Error> {
     event!(Level::INFO, "opening");
 
-    let (cx, id) = world.create(cx, "daicon-file-source")?;
+    let id = world.create(id, "daicon-file-source")?;
     let handler = Handler::to(id);
 
     // Handled as its own actor, as it needs to do async processing
-    let indices = indices::start(world, &cx, file.clone(), options)?;
+    let indices = indices::start(world, id, file.clone(), options)?;
 
     // Start the root manager actor
     let actor = Service {
@@ -61,7 +61,7 @@ struct PendingGet {
 }
 
 struct PendingSet {
-    id: Id,
+    id: FileId,
     size: u32,
     on_result: Handler<source::SetResponse>,
 }
@@ -75,13 +75,8 @@ enum ImplMessage {
 impl Actor for Service {
     type Message = ImplMessage;
 
-    fn process(
-        &mut self,
-        world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             match message {
                 ImplMessage::Message(message) => {
                     self.on_message(world, message)?;
@@ -222,7 +217,7 @@ impl Service {
         Ok(())
     }
 
-    fn send_read_index(&self, world: &mut World, action_id: Uuid, id: Id) {
+    fn send_read_index(&self, world: &mut World, action_id: Uuid, id: FileId) {
         let on_result = self.handler.clone().map(ImplMessage::GetIndexResult);
         let action = GetAction { id, on_result };
         let message = indices::Message {

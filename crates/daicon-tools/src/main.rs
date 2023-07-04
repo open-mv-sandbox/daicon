@@ -3,7 +3,7 @@ mod commands;
 use anyhow::{bail, Error};
 use clap::{Parser, Subcommand};
 use daicon_types::Id;
-use stewart::{Context, World};
+use stewart::World;
 use tracing::{event, Level};
 use tracing_subscriber::{prelude::*, EnvFilter, FmtSubscriber};
 
@@ -34,17 +34,16 @@ fn main() {
 fn try_main(args: CliArgs) -> Result<(), Error> {
     // Set up the runtime
     let mut world = World::default();
-    let cx = Context::default();
 
     // Start the command actor
     match args.command {
-        Command::Create(command) => commands::create::start(&mut world, &cx, command)?,
-        Command::Set(command) => commands::set::start(&mut world, &cx, command)?,
-        Command::Get(command) => commands::get::start(&mut world, &cx, command)?,
+        Command::Create(command) => commands::create::start(&mut world, command)?,
+        Command::Set(command) => commands::set::start(&mut world, command)?,
+        Command::Get(command) => commands::get::start(&mut world, command)?,
     };
 
     // Run the command until it's done
-    world.run_until_idle(&cx)?;
+    world.run_until_idle()?;
 
     // TODO: Receive command errors
     Ok(())

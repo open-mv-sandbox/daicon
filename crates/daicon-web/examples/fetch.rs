@@ -1,13 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
 use anyhow::{Context as _, Error};
-use daicon::{
-    open_file_source,
-    protocol::source::{self, Id},
-    FileSourceOptions,
-};
+use daicon::{open_file_source, protocol::source, FileSourceOptions};
 use daicon_web::open_fetch_file;
-use stewart::{Actor, Context, Handler, State, World};
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, Level};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
@@ -21,25 +17,24 @@ fn main() {
     let hnd = Rc::new(RefCell::new(world));
 
     let mut world = hnd.borrow_mut();
-    let cx = Context::default();
 
-    let (cx, id) = world.create(&cx, "fetch-example").unwrap();
+    let id = world.create(Id::none(), "fetch-example").unwrap();
     let handler = Handler::to(id);
 
     event!(Level::INFO, "initializing fetch service...");
     let url = "http://localhost:8080/package.example";
-    let file = open_fetch_file(&mut world, &cx, url.to_string(), hnd.clone()).unwrap();
+    let file = open_fetch_file(&mut world, id, url.to_string(), hnd.clone()).unwrap();
 
     event!(Level::INFO, "initializing daicon service...");
     let options = FileSourceOptions::default().open_table(0);
-    let source = open_file_source(&mut world, &cx, file, options).unwrap();
+    let source = open_file_source(&mut world, id, file, options).unwrap();
 
     event!(Level::INFO, "starting example service...");
     world.start(id, ExampleService).unwrap();
 
     event!(Level::INFO, "dispatching requests...");
     let action = source::GetAction {
-        id: Id(0xbacc2ba1),
+        id: source::Id(0xbacc2ba1),
         on_result: handler.clone(),
     };
     let message = source::Message {
@@ -49,7 +44,7 @@ fn main() {
     source.handle(&mut world, message);
 
     let action = source::GetAction {
-        id: Id(0x1f063ad4),
+        id: source::Id(0x1f063ad4),
         on_result: handler,
     };
     let message = source::Message {
@@ -59,7 +54,7 @@ fn main() {
     source.handle(&mut world, message);
 
     // Process everything
-    world.run_until_idle(&cx).unwrap();
+    world.run_until_idle().unwrap();
 }
 
 struct ExampleService;
@@ -67,13 +62,8 @@ struct ExampleService;
 impl Actor for ExampleService {
     type Message = source::GetResponse;
 
-    fn process(
-        &mut self,
-        _world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, _world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             event!(Level::INFO, "received result");
 
             // Decode the data as a text file

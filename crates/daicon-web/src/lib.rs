@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, ops::Range, rc::Rc};
 use anyhow::{Context as _, Error};
 use daicon::protocol::file;
 use js_sys::{ArrayBuffer, Uint8Array};
-use stewart::{Actor, Context, Handler, State, World};
+use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 use uuid::Uuid;
 use wasm_bindgen::JsCast;
@@ -13,11 +13,11 @@ use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 #[instrument("daicon-web::open_fetch_file", skip_all)]
 pub fn open_fetch_file(
     world: &mut World,
-    cx: &Context,
+    id: Id,
     url: String,
     hnd: WorldHandle,
 ) -> Result<Handler<file::Message>, Error> {
-    let (_cx, id) = world.create(cx, "daicon-fetch-file")?;
+    let id = world.create(id, "daicon-fetch-file")?;
     let handler = Handler::to(id);
 
     let actor = FetchFile {
@@ -43,13 +43,8 @@ struct FetchFile {
 impl Actor for FetchFile {
     type Message = MessageImpl;
 
-    fn process(
-        &mut self,
-        world: &mut World,
-        _cx: &Context,
-        state: &mut State<Self>,
-    ) -> Result<(), Error> {
-        while let Some(message) = state.next() {
+    fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        while let Some(message) = cx.next() {
             match message {
                 MessageImpl::Message(message) => {
                     self.on_message(world, message);
@@ -159,8 +154,7 @@ async fn do_fetch(
     let mut world = hnd.borrow_mut();
     handler.handle(&mut world, MessageImpl::FetchResult { id, data });
 
-    let cx = Context::default();
-    world.run_until_idle(&cx).unwrap();
+    world.run_until_idle().unwrap();
 }
 
 /// TODO: Replace this with a more thought out executor abstraction.
