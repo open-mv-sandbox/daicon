@@ -12,8 +12,8 @@ pub struct FileSourceOptions {
 impl FileSourceOptions {
     /// Set the offset of the first table to open.
     ///
-    /// By giving an offset, the file source will start by reading all tables in sequence.
-    /// This will happen concurrently with resolving get actions.
+    /// If given, before writing any new tables the implementation will read all existing tables.
+    /// If not given, a new table will be inserted.
     pub fn open_table(mut self, value: u64) -> Self {
         self.open_table = Some(value);
         self

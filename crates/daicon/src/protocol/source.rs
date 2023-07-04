@@ -11,7 +11,7 @@ pub use daicon_types::Id;
 /// This could probably be the basis of a broader message distribution system.
 /// Such a system could make use of the ID system to route messages and responses, in a way that
 /// can be serialized and converted back and forth.
-pub struct Message {
+pub struct Request {
     pub id: Uuid,
     pub action: Action,
 }

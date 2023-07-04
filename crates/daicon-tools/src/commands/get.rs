@@ -43,7 +43,7 @@ pub fn start(world: &mut World, command: Command) -> Result<(), Error> {
         id: asset_id,
         on_result: handler.map(Message::Result),
     };
-    let message = source::Message {
+    let message = source::Request {
         id: Uuid::new_v4(),
         action: source::Action::Get(action),
     };

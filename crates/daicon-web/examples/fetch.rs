@@ -37,7 +37,7 @@ fn main() {
         id: source::Id(0xbacc2ba1),
         on_result: handler.clone(),
     };
-    let message = source::Message {
+    let message = source::Request {
         id: Uuid::new_v4(),
         action: source::Action::Get(action),
     };
@@ -47,7 +47,7 @@ fn main() {
         id: source::Id(0x1f063ad4),
         on_result: handler,
     };
-    let message = source::Message {
+    let message = source::Request {
         id: Uuid::new_v4(),
         action: source::Action::Get(action),
     };

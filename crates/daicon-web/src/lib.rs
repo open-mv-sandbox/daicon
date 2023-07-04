@@ -16,7 +16,7 @@ pub fn open_fetch_file(
     id: Id,
     url: String,
     hnd: WorldHandle,
-) -> Result<Handler<file::Message>, Error> {
+) -> Result<Handler<file::Request>, Error> {
     let id = world.create(id, "daicon-fetch-file")?;
     let handler = Handler::to(id);
 
@@ -60,7 +60,7 @@ impl Actor for FetchFile {
 }
 
 impl FetchFile {
-    fn on_message(&mut self, world: &mut World, message: file::Message) {
+    fn on_message(&mut self, world: &mut World, message: file::Request) {
         match message.action {
             file::Action::Read(action) => {
                 self.on_read(message.id, action);
@@ -111,7 +111,7 @@ impl FetchFile {
 }
 
 enum MessageImpl {
-    Message(file::Message),
+    Message(file::Request),
     FetchResult { id: Uuid, data: Vec<u8> },
 }
 

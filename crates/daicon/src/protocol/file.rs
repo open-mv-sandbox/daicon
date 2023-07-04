@@ -6,7 +6,7 @@ use uuid::Uuid;
 ///
 /// A "file" is an addressable blob of binary data, not necessarily a system file.
 /// This is different from a "stream" which is a read/write endpoint that *cannot* be addressed.
-pub struct Message {
+pub struct Request {
     pub id: Uuid,
     pub action: Action,
 }

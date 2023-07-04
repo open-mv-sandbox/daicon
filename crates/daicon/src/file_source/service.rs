@@ -20,9 +20,9 @@ use crate::{
 pub fn open_file_source(
     world: &mut World,
     id: Id,
-    file: Handler<file::Message>,
+    file: Handler<file::Request>,
     options: FileSourceOptions,
-) -> Result<Handler<source::Message>, Error> {
+) -> Result<Handler<source::Request>, Error> {
     event!(Level::INFO, "opening");
 
     let id = world.create(id, "daicon-file-source")?;
@@ -48,8 +48,8 @@ pub fn open_file_source(
 
 struct Service {
     handler: Handler<ImplMessage>,
-    file: Handler<file::Message>,
-    indices: Handler<indices::Message>,
+    file: Handler<file::Request>,
+    indices: Handler<indices::Request>,
 
     // Ongoing tracked actions
     get_tasks: HashMap<Uuid, PendingGet>,
@@ -67,7 +67,7 @@ struct PendingSet {
 }
 
 enum ImplMessage {
-    Message(source::Message),
+    Message(source::Request),
     GetIndexResult((Uuid, u64, u32)),
     SetWriteDataResult(file::WriteResponse),
 }
@@ -95,7 +95,7 @@ impl Actor for Service {
 }
 
 impl Service {
-    fn on_message(&mut self, world: &mut World, message: source::Message) -> Result<(), Error> {
+    fn on_message(&mut self, world: &mut World, message: source::Request) -> Result<(), Error> {
         match message.action {
             source::Action::Get(action) => {
                 self.on_get(world, message.id, action)?;
@@ -220,7 +220,7 @@ impl Service {
     fn send_read_index(&self, world: &mut World, action_id: Uuid, id: FileId) {
         let on_result = self.handler.clone().map(ImplMessage::GetIndexResult);
         let action = GetAction { id, on_result };
-        let message = indices::Message {
+        let message = indices::Request {
             id: action_id,
             action: Action::Get(action),
         };
@@ -236,7 +236,7 @@ impl Service {
                 .on_result
                 .map(move |_| source::SetResponse { id, result: Ok(()) }),
         };
-        let message = indices::Message {
+        let message = indices::Request {
             id,
             action: Action::Set(action),
         };
@@ -261,7 +261,7 @@ impl Service {
                 }),
             }),
         };
-        let message = file::Message {
+        let message = file::Request {
             id,
             action: file::Action::Read(action),
         };
@@ -274,7 +274,7 @@ impl Service {
             data,
             on_result: self.handler.clone().map(ImplMessage::SetWriteDataResult),
         };
-        let message = file::Message {
+        let message = file::Request {
             id,
             action: file::Action::Write(action),
         };

@@ -8,55 +8,7 @@ use uuid::Uuid;
 
 use crate::{file_source::table::Table, protocol::file, FileSourceOptions};
 
-#[instrument("daicon::start_indices", skip_all)]
-pub fn start(
-    world: &mut World,
-    id: Id,
-    file: Handler<file::Message>,
-    options: FileSourceOptions,
-) -> Result<Handler<Message>, Error> {
-    event!(Level::DEBUG, "starting");
-
-    let id = world.create(id, "daicon-file-indices")?;
-    let handler = Handler::to(id);
-
-    let mut tables = Vec::new();
-    let mut pending_read = None;
-
-    // TODO: Respond with validation results, success of open or create.
-
-    if let Some(offset) = options.open_table {
-        // Start opening by reading the first table
-        pending_read = Some(offset);
-        read_table(world, &file, handler.clone(), offset)?;
-    } else {
-        // Write a table immediately at the given offset
-
-        // TODO: Append to the end of the file, then store the offset.
-        let table = Table::new(options.allocate_capacity);
-        write_table(world, &file, &table, 0)?;
-
-        // Track the table we just wrote
-        tables.push(table);
-    }
-
-    // Start the actor
-    let actor = Service {
-        sender: handler.clone(),
-        file,
-
-        tables: Vec::new(),
-        pending_read,
-
-        get_tasks: HashMap::new(),
-        set_tasks: HashMap::new(),
-    };
-    world.start(id, actor)?;
-
-    Ok(handler.map(ImplMessage::Message))
-}
-
-pub struct Message {
+pub struct Request {
     pub id: Uuid,
     pub action: Action,
 }
@@ -78,9 +30,55 @@ pub struct SetAction {
     pub on_result: Handler<Uuid>,
 }
 
+#[instrument("daicon::start_indices", skip_all)]
+pub fn start(
+    world: &mut World,
+    id: Id,
+    file: Handler<file::Request>,
+    options: FileSourceOptions,
+) -> Result<Handler<Request>, Error> {
+    event!(Level::DEBUG, "starting");
+
+    let id = world.create(id, "daicon-file-indices")?;
+    let handler = Handler::to(id);
+
+    let mut tables = Vec::new();
+    let mut pending_read = None;
+
+    // TODO: Respond with validation results, success of open or create.
+
+    if let Some(offset) = options.open_table {
+        // Start opening by reading the first table
+        pending_read = Some(offset);
+        read_table(world, &file, handler.clone(), offset)?;
+    } else {
+        // Write a table immediately
+        let table = Table::new(options.allocate_capacity);
+        write_table(world, &file, &table, None)?;
+
+        // Track the table we just wrote
+        tables.push(table);
+    }
+
+    // Start the actor
+    let actor = Service {
+        sender: handler.clone(),
+        file,
+
+        tables: Vec::new(),
+        pending_read,
+
+        get_tasks: HashMap::new(),
+        set_tasks: HashMap::new(),
+    };
+    world.start(id, actor)?;
+
+    Ok(handler.map(Message::Message))
+}
+
 struct Service {
-    sender: Handler<ImplMessage>,
-    file: Handler<file::Message>,
+    sender: Handler<Message>,
+    file: Handler<file::Request>,
 
     tables: Vec<(u64, Table)>,
 
@@ -92,14 +90,19 @@ struct Service {
     set_tasks: HashMap<Uuid, SetAction>,
 }
 
+enum Message {
+    Message(Request),
+    ReadResult(file::ReadResponse),
+}
+
 impl Actor for Service {
-    type Message = ImplMessage;
+    type Message = Message;
 
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
         while let Some(message) = cx.next() {
             match message {
-                ImplMessage::Message(message) => self.on_message(message),
-                ImplMessage::ReadResult(message) => self.on_read_result(world, message)?,
+                Message::Message(message) => self.on_message(message),
+                Message::ReadResult(message) => self.on_read_result(world, message)?,
             }
         }
 
@@ -110,7 +113,7 @@ impl Actor for Service {
 }
 
 impl Service {
-    fn on_message(&mut self, message: Message) {
+    fn on_message(&mut self, message: Request) {
         match message.action {
             Action::Get(action) => {
                 event!(Level::DEBUG, id = ?action.id, "received get");
@@ -130,10 +133,12 @@ impl Service {
     ) -> Result<(), Error> {
         event!(Level::DEBUG, "received read result");
 
-        // Attempt to parse the table
-        // TODO: This is where validation should happen
+        // TODO: This is where validation should happen.
+
         // TODO: Retry if the table's valid data is larger than what we've read.
         // This happens if the read length heuristic is too small, we need to retry then.
+
+        // Attempt to parse the table
         let data = message.result?;
         let (table, next) = Table::deserialize(&data)?;
 
@@ -180,13 +185,13 @@ fn update_get(world: &mut World, tables: &[(u64, Table)], id: Uuid, action: &Get
 
 fn update_set(
     world: &mut World,
-    file: &Handler<file::Message>,
+    file: &Handler<file::Request>,
     tables: &mut [(u64, Table)],
     id: Uuid,
     action: &SetAction,
 ) -> bool {
     // Find a table with an empty slot
-    // TODO: We now have more than one table
+    // TODO: We now can have more than one table when reading
     let (offset, table) = if let Some(value) = tables.first_mut() {
         value
     } else {
@@ -199,16 +204,17 @@ fn update_set(
     if !table.try_insert(action.id, action.offset, action.size) {
         event!(
             Level::ERROR,
-            "cannot insert entry, allocation not implemented"
+            "cannot insert entry, allocation not yet implemented"
         );
         return false;
     }
 
     // Flush write the table
-    write_table(world, file, table, *offset).unwrap();
+    // TODO: Batch writeback
+    write_table(world, file, table, Some(*offset)).unwrap();
 
     // Report success
-    // TODO: Wait for write to report back
+    // TODO: Wait for write to succeed before reporting back
     action.on_result.handle(world, id);
 
     false
@@ -218,15 +224,10 @@ fn find_in(tables: &[(u64, Table)], id: FileId) -> Option<(u64, u32)> {
     tables.iter().find_map(|(_, table)| table.find(id))
 }
 
-enum ImplMessage {
-    Message(Message),
-    ReadResult(file::ReadResponse),
-}
-
 fn read_table(
     world: &mut World,
-    file: &Handler<file::Message>,
-    sender: Handler<ImplMessage>,
+    file: &Handler<file::Request>,
+    sender: Handler<Message>,
     offset: u64,
 ) -> Result<(), Error> {
     // Estimate the size of the table, so we can hopefully prefetch all of it
@@ -236,9 +237,9 @@ fn read_table(
     let action = file::ReadAction {
         offset,
         size,
-        on_result: sender.map(ImplMessage::ReadResult),
+        on_result: sender.map(Message::ReadResult),
     };
-    let message = file::Message {
+    let message = file::Request {
         id: Uuid::new_v4(),
         action: file::Action::Read(action),
     };
@@ -249,19 +250,19 @@ fn read_table(
 
 fn write_table(
     world: &mut World,
-    file: &Handler<file::Message>,
+    file: &Handler<file::Request>,
     table: &Table,
-    offset: u64,
+    offset: Option<u64>,
 ) -> Result<(), Error> {
     let data = table.serialize()?;
 
     // Send to file for writing
     let action = file::WriteAction {
-        offset: Some(offset),
+        offset,
         data,
         on_result: Handler::none(),
     };
-    let message = file::Message {
+    let message = file::Request {
         id: Uuid::new_v4(),
         action: file::Action::Write(action),
     };

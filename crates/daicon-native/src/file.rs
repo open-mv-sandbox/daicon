@@ -14,7 +14,7 @@ pub fn open_system_file(
     id: Id,
     path: String,
     truncate: bool,
-) -> Result<Handler<file::Message>, Error> {
+) -> Result<Handler<file::Request>, Error> {
     event!(Level::INFO, "opening");
 
     let id = world.create(id, "daicon-system-file")?;
@@ -38,7 +38,7 @@ struct SystemFile {
 }
 
 impl Actor for SystemFile {
-    type Message = file::Message;
+    type Message = file::Request;
 
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
         while let Some(message) = cx.next() {
