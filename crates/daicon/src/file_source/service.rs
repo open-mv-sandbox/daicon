@@ -42,12 +42,12 @@ pub fn open_file_source(
     };
     world.start(id, actor)?;
 
-    let sender = handler.map(ImplMessage::Message);
+    let sender = handler.map(Message::Request);
     Ok(sender)
 }
 
 struct Service {
-    handler: Handler<ImplMessage>,
+    handler: Handler<Message>,
     file: Handler<file::Request>,
     indices: Handler<indices::Request>,
 
@@ -66,25 +66,25 @@ struct PendingSet {
     on_result: Handler<source::SetResponse>,
 }
 
-enum ImplMessage {
-    Message(source::Request),
+enum Message {
+    Request(source::Request),
     GetIndexResult((Uuid, u64, u32)),
     SetWriteDataResult(file::WriteResponse),
 }
 
 impl Actor for Service {
-    type Message = ImplMessage;
+    type Message = Message;
 
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
         while let Some(message) = cx.next() {
             match message {
-                ImplMessage::Message(message) => {
+                Message::Request(message) => {
                     self.on_message(world, message)?;
                 }
-                ImplMessage::GetIndexResult((action_id, offset, size)) => {
+                Message::GetIndexResult((action_id, offset, size)) => {
                     self.on_get_index_result(world, action_id, offset, size)?;
                 }
-                ImplMessage::SetWriteDataResult(result) => {
+                Message::SetWriteDataResult(result) => {
                     self.on_set_write_data_result(world, result)?;
                 }
             }
@@ -218,7 +218,7 @@ impl Service {
     }
 
     fn send_read_index(&self, world: &mut World, action_id: Uuid, id: FileId) {
-        let on_result = self.handler.clone().map(ImplMessage::GetIndexResult);
+        let on_result = self.handler.clone().map(Message::GetIndexResult);
         let action = GetAction { id, on_result };
         let message = indices::Request {
             id: action_id,
@@ -272,7 +272,7 @@ impl Service {
         let action = file::WriteAction {
             offset: None,
             data,
-            on_result: self.handler.clone().map(ImplMessage::SetWriteDataResult),
+            on_result: self.handler.clone().map(Message::SetWriteDataResult),
         };
         let message = file::Request {
             id,

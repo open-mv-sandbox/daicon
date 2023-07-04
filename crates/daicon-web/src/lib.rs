@@ -29,27 +29,32 @@ pub fn open_fetch_file(
     };
     world.start(id, actor)?;
 
-    Ok(handler.map(MessageImpl::Message))
+    Ok(handler.map(Message::Request))
 }
 
 struct FetchFile {
     hnd: WorldHandle,
-    handler: Handler<MessageImpl>,
+    handler: Handler<Message>,
     url: String,
 
     pending: HashMap<Uuid, file::ReadAction>,
 }
 
+enum Message {
+    Request(file::Request),
+    FetchResult { id: Uuid, data: Vec<u8> },
+}
+
 impl Actor for FetchFile {
-    type Message = MessageImpl;
+    type Message = Message;
 
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
         while let Some(message) = cx.next() {
             match message {
-                MessageImpl::Message(message) => {
+                Message::Request(message) => {
                     self.on_message(world, message);
                 }
-                MessageImpl::FetchResult { id, data } => {
+                Message::FetchResult { id, data } => {
                     self.on_fetch_result(world, id, data)?;
                 }
             }
@@ -110,14 +115,9 @@ impl FetchFile {
     }
 }
 
-enum MessageImpl {
-    Message(file::Request),
-    FetchResult { id: Uuid, data: Vec<u8> },
-}
-
 async fn do_fetch(
     hnd: WorldHandle,
-    handler: Handler<MessageImpl>,
+    handler: Handler<Message>,
     id: Uuid,
     url: String,
     range: Range<u64>,
@@ -152,7 +152,7 @@ async fn do_fetch(
 
     // Send the data back
     let mut world = hnd.borrow_mut();
-    handler.handle(&mut world, MessageImpl::FetchResult { id, data });
+    handler.handle(&mut world, Message::FetchResult { id, data });
 
     world.run_until_idle().unwrap();
 }

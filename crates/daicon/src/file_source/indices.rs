@@ -73,7 +73,7 @@ pub fn start(
     };
     world.start(id, actor)?;
 
-    Ok(handler.map(Message::Message))
+    Ok(handler.map(Message::Request))
 }
 
 struct Service {
@@ -91,7 +91,7 @@ struct Service {
 }
 
 enum Message {
-    Message(Request),
+    Request(Request),
     ReadResult(file::ReadResponse),
 }
 
@@ -101,7 +101,7 @@ impl Actor for Service {
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
         while let Some(message) = cx.next() {
             match message {
-                Message::Message(message) => self.on_message(message),
+                Message::Request(message) => self.on_message(message),
                 Message::ReadResult(message) => self.on_read_result(world, message)?,
             }
         }
