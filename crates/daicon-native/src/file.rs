@@ -8,7 +8,7 @@ use daicon::protocol::file;
 use stewart::{Actor, Context, Handler, Id, World};
 use tracing::{event, instrument, Level};
 
-#[instrument("daicon-native::open_system_file", skip_all)]
+#[instrument(skip_all)]
 pub fn open_system_file(
     world: &mut World,
     id: Id,
@@ -41,9 +41,13 @@ impl Actor for SystemFile {
     type Message = file::Request;
 
     fn process(&mut self, world: &mut World, mut cx: Context<Self>) -> Result<(), Error> {
+        println!("WOKEN UP");
+
         while let Some(message) = cx.next() {
             match message.action {
                 file::Action::Read(action) => {
+                    event!(Level::DEBUG, "reading from file");
+
                     // TODO: Currently remaining bytes after EOF are kept zero, but maybe we want to
                     // feedback a lack of remaining bytes.
 
@@ -60,6 +64,8 @@ impl Actor for SystemFile {
                     action.on_result.handle(world, result);
                 }
                 file::Action::Write(action) => {
+                    event!(Level::DEBUG, "writing to file");
+
                     // TODO: Check write region is valid if offset is Some.
 
                     // Seek to given location
@@ -84,6 +90,12 @@ impl Actor for SystemFile {
         }
 
         Ok(())
+    }
+}
+
+impl Drop for SystemFile {
+    fn drop(&mut self) {
+        println!("DROPPING");
     }
 }
 

@@ -10,7 +10,7 @@ use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{Headers, Request, RequestInit, RequestMode, Response};
 
-#[instrument("daicon-web::open_fetch_file", skip_all)]
+#[instrument("open_fetch_file", skip_all)]
 pub fn open_fetch_file(
     world: &mut World,
     id: Id,

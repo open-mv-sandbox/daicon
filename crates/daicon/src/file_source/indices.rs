@@ -8,6 +8,9 @@ use uuid::Uuid;
 
 use crate::{file_source::table::Table, protocol::file, FileSourceOptions};
 
+// TODO: Needs a lot of cleanup
+// TODO: With stewart 0.9 mailboxes no longer needs to be its own actor.
+
 pub struct Request {
     pub id: Uuid,
     pub action: Action,
@@ -30,7 +33,7 @@ pub struct SetAction {
     pub on_result: Handler<Uuid>,
 }
 
-#[instrument("daicon::start_indices", skip_all)]
+#[instrument("start_file_indices", skip_all)]
 pub fn start(
     world: &mut World,
     id: Id,
@@ -53,8 +56,10 @@ pub fn start(
         read_table(world, &file, handler.clone(), offset)?;
     } else {
         // Write a table immediately
+        // TODO: This currently always writes at 0, this is not correct and will in the future
+        // fail on an empty file. (it already should following the protocol)
         let table = Table::new(options.allocate_capacity);
-        write_table(world, &file, &table, None)?;
+        write_table(world, &file, &table, Handler::none())?;
 
         // Track the table we just wrote
         tables.push(table);
@@ -67,6 +72,7 @@ pub fn start(
 
         tables: Vec::new(),
         pending_read,
+        pending_flush: HashMap::new(),
 
         get_tasks: HashMap::new(),
         set_tasks: HashMap::new(),
@@ -80,10 +86,11 @@ struct Service {
     sender: Handler<Message>,
     file: Handler<file::Request>,
 
-    tables: Vec<(u64, Table)>,
+    tables: Vec<Table>,
 
     /// If set, the service is currently still reading tables at the given offset.
     pending_read: Option<u64>,
+    pending_flush: HashMap<Uuid, Vec<(Uuid, Handler<Uuid>)>>,
 
     // Ongoing tracked actions
     get_tasks: HashMap<Uuid, GetAction>,
@@ -93,6 +100,7 @@ struct Service {
 enum Message {
     Request(Request),
     ReadResult(file::ReadResponse),
+    WriteResult(file::WriteResponse),
 }
 
 impl Actor for Service {
@@ -103,6 +111,7 @@ impl Actor for Service {
             match message {
                 Message::Request(message) => self.on_message(message),
                 Message::ReadResult(message) => self.on_read_result(world, message)?,
+                Message::WriteResult(message) => self.on_write_result(world, message)?,
             }
         }
 
@@ -140,11 +149,11 @@ impl Service {
 
         // Attempt to parse the table
         let data = message.result?;
-        let (table, next) = Table::deserialize(&data)?;
+        let offset = self.pending_read.context("no pending read")?;
+        let (table, next) = Table::deserialize(offset, &data)?;
 
         // Track the table we've at this point successfully parsed
-        let offset = self.pending_read.context("no pending read")?;
-        self.tables.push((offset, table));
+        self.tables.push(table);
 
         // If we have a next table, queue it up for the next read
         if let Some(value) = next {
@@ -159,18 +168,57 @@ impl Service {
         Ok(())
     }
 
+    fn on_write_result(
+        &mut self,
+        world: &mut World,
+        message: file::WriteResponse,
+    ) -> Result<(), Error> {
+        // Reply back on pending writes that we've succeeded
+        let flush = self
+            .pending_flush
+            .remove(&message.id)
+            .context("can't find pending flush")?;
+        for (id, on_result) in flush {
+            on_result.handle(world, id);
+        }
+
+        Ok(())
+    }
+
     fn update_tasks(&mut self, world: &mut World) {
         // Resolve gets we can resolve
         self.get_tasks
             .retain(|id, action| update_get(world, &self.tables, *id, action));
 
         // Resolve sets we can resolve
-        self.set_tasks
-            .retain(|id, action| update_set(world, &self.file, &mut self.tables, *id, action));
+        self.set_tasks.retain(|id, action| {
+            update_set(&mut self.tables, self.pending_read.is_some(), *id, action)
+        });
+
+        // Check any marked dirty tables for write flush
+        for table in &mut self.tables {
+            if let Some(flush) = table.poll_flush() {
+                event!(
+                    Level::DEBUG,
+                    table_offset = table.table_offset(),
+                    "flushing table marked dirty"
+                );
+
+                // TODO: Soft error
+                let id = write_table(
+                    world,
+                    &self.file,
+                    table,
+                    self.sender.clone().map(Message::WriteResult),
+                )
+                .unwrap();
+                self.pending_flush.insert(id, flush);
+            }
+        }
     }
 }
 
-fn update_get(world: &mut World, tables: &[(u64, Table)], id: Uuid, action: &GetAction) -> bool {
+fn update_get(world: &mut World, tables: &[Table], id: Uuid, action: &GetAction) -> bool {
     let (offset, size) = if let Some(value) = find_in(tables, action.id) {
         value
     } else {
@@ -183,25 +231,15 @@ fn update_get(world: &mut World, tables: &[(u64, Table)], id: Uuid, action: &Get
     false
 }
 
-fn update_set(
-    world: &mut World,
-    file: &Handler<file::Request>,
-    tables: &mut [(u64, Table)],
-    id: Uuid,
-    action: &SetAction,
-) -> bool {
-    // Find a table with an empty slot
-    // TODO: We now can have more than one table when reading
-    let (offset, table) = if let Some(value) = tables.first_mut() {
-        value
-    } else {
+fn update_set(tables: &mut [Table], pending_read: bool, id: Uuid, action: &SetAction) -> bool {
+    // We can't do anything if we're not done reading in yet first
+    if pending_read {
         return true;
-    };
+    }
 
-    event!(Level::DEBUG, id = ?action.id, "setting entry");
-
-    // TODO: Allocate a new table if we've read all and we can't find a slot
-    if !table.try_insert(action.id, action.offset, action.size) {
+    // Try to insert into existing tables
+    if !try_insert_any(tables, action, id) {
+        // TODO: Allocate a new table if we've read all and we can't find a slot
         event!(
             Level::ERROR,
             "cannot insert entry, allocation not yet implemented"
@@ -209,19 +247,28 @@ fn update_set(
         return false;
     }
 
-    // Flush write the table
-    // TODO: Batch writeback
-    write_table(world, file, table, Some(*offset)).unwrap();
+    false
+}
 
-    // Report success
-    // TODO: Wait for write to succeed before reporting back
-    action.on_result.handle(world, id);
+fn try_insert_any(tables: &mut [Table], action: &SetAction, uuid: Uuid) -> bool {
+    // Find a table with an empty slot
+    for table in tables {
+        if table.try_insert(
+            action.id,
+            action.offset,
+            action.size,
+            uuid,
+            &action.on_result,
+        ) {
+            return true;
+        }
+    }
 
     false
 }
 
-fn find_in(tables: &[(u64, Table)], id: FileId) -> Option<(u64, u32)> {
-    tables.iter().find_map(|(_, table)| table.find(id))
+fn find_in(tables: &[Table], id: FileId) -> Option<(u64, u32)> {
+    tables.iter().find_map(|table| table.find(id))
 }
 
 fn read_table(
@@ -252,21 +299,23 @@ fn write_table(
     world: &mut World,
     file: &Handler<file::Request>,
     table: &Table,
-    offset: Option<u64>,
-) -> Result<(), Error> {
+    on_result: Handler<file::WriteResponse>,
+) -> Result<Uuid, Error> {
+    let id = Uuid::new_v4();
+
     let data = table.serialize()?;
 
     // Send to file for writing
     let action = file::WriteAction {
-        offset,
+        offset: Some(table.table_offset()),
         data,
-        on_result: Handler::none(),
+        on_result,
     };
     let message = file::Request {
-        id: Uuid::new_v4(),
+        id,
         action: file::Action::Write(action),
     };
     file.handle(world, message);
 
-    Ok(())
+    Ok(id)
 }
